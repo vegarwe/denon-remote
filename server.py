@@ -118,7 +118,7 @@ class MainHandler(tornado.web.RequestHandler):
             self.send_error(405)
 
     def get(self, path):
-        if path == '/api/status':
+        if path == 'api/status':
             self.set_status(200)
             self.write(denon.status)
         elif path == '' or path == 'index.html':
@@ -134,15 +134,26 @@ INDEX_HTML = """
 <!DOCTYPE html>
 <html ng-app="denonRemoteApp">
 <head>
+    <title>Raiom remote</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css">
     <style>
         button {
-            width:  151px;
-            padding: 12px;
-            margin:   2px;
+            width:         151px;
+            height:         40px;
+            margin:          5px;
+            margin-bottom:   8px !important;
         }
+
+        table {
+            margin-left:    10px;
+            font-size:      20px;
+        }
+        td {
+            padding-left:         10px;
+        }
+
     </style>
     <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.14/angular.min.js"></script>
 </head>
@@ -165,10 +176,12 @@ INDEX_HTML = """
         <button class="btn" ng-click='put_cmd("SITUNER")'  > Radio (TUNER) </button>
         <button class="btn" ng-click='put_cmd("SISAT/CBL")'> RasbPi (SAT/CBL) </button>
 
-        <div>MU: {{ denon_status.MU }}</div>
-        <div>SI: {{ denon_status.SI }}</div>
-        <div>MV: {{ denon_status.MV }}</div>
-        <div>PW: {{ denon_status.PW }}</div>
+        <table class='status'>
+            <tr><th>MU:</th><td>{{ denon_status.MU }}</td></tr>
+            <tr><th>SI:</th><td>{{ denon_status.SI }}</td></tr>
+            <tr><th>MV:</th><td>{{ denon_status.MV }}</td></tr>
+            <tr><th>PW:</th><td>{{ denon_status.PW }}</td></tr>
+        </table>
     </div>
 
 </div> <!-- end container -->
@@ -229,6 +242,7 @@ INDEX_HTML = """
                 console.log("onopen");
             };
         }
+        $scope.get_status();
 
         connect();
 
