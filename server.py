@@ -134,63 +134,42 @@ INDEX_HTML = """
 <!DOCTYPE html>
 <html ng-app="denonRemoteApp">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css">
-  <style>
-      .col-md-4.split button {
-          width:  151px;
-          padding: 12px;
-          margin:   2px;
-      }
-      .col-md-4 button {
-          width:  310px;
-          padding: 12px;
-          margin:   2px;
-      }
-  </style>
-  <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.14/angular.min.js"></script>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css">
+    <style>
+        button {
+            width:  151px;
+            padding: 12px;
+            margin:   2px;
+        }
+    </style>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.14/angular.min.js"></script>
 </head>
 <body ng-controller="DenonCtrl">
 
 <div class="container">
 
-    <!--
-    <div class="jumbotron">
-      <h1>W3Schools Demo</h1>
-      <p>Resize this responsive page!</p>
-    </div>
-    -->
-
     Input
-    <div class="row">
-        <div class="col-md-4 split">
-            <button ng-click='put_cmd("PWON")'                       > ON </button>
-            <button ng-click='put_cmd("PWSTANDBY")'                  > STANDBY </button>
-        </div>
-        <div class="col-md-4 split">
-            <button ng-click='put_cmd("MVUP")'                       > Up </button>
-            <button ng-click='put_cmd("MUON")'                       > Mute </button>
-        </div>
-        <div class="col-md-4 split">
-            <button ng-click='put_cmd("MVDOWN")'                     > Down </button>
-            <button ng-click='put_cmd("MUOFF")'                      > Unmute </button>
-        </div>
-        <div class="col-md-4"><button ng-click='put_cmd("SIDVD")'    > Chromecast (DVD) </button></div>
-        <div class="col-md-4"><button ng-click='put_cmd("SITV")'     > TV </button></div>
-        <div class="col-md-4"><button ng-click='put_cmd("SIVCR")'    > Jack plug (VCR/iPod) </button></div>
-        <div class="col-md-4"><button ng-click='put_cmd("SIHDP")'    > HDMI plug (HDP) </button></div>
-        <div class="col-md-4"><button ng-click='put_cmd("SITUNER")'  > Radio (TUNER) </button></div>
-        <div class="col-md-4"><button ng-click='put_cmd("SISAT/CBL")'> RasbPi (SAT/CBL) </button></div>
-    </div>
+    <div>
+        <button class="btn" ng-click='put_cmd("PWON")'     > ON </button>
+        <button class="btn" ng-click='put_cmd("PWSTANDBY")'> STANDBY </button>
+        <button class="btn" ng-click='put_cmd("MVUP")'     > Up </button>
+        <button class="btn" ng-click='put_cmd("MVDOWN")'   > Down </button>
+        <button class="btn" ng-click='put_cmd("MUON")'     > Mute </button>
+        <button class="btn" ng-click='put_cmd("MUOFF")'    > Unmute </button>
+        <button class="btn" ng-click='put_cmd("SIDVD")'    > Chromecast (DVD) </button>
+        <button class="btn" ng-click='put_cmd("SITV")'     > TV </button>
+        <button class="btn" ng-click='put_cmd("SIVCR")'    > Jack plug (VCR/iPod) </button>
+        <button class="btn" ng-click='put_cmd("SIHDP")'    > HDMI plug (HDP) </button>
+        <button class="btn" ng-click='put_cmd("SITUNER")'  > Radio (TUNER) </button>
+        <button class="btn" ng-click='put_cmd("SISAT/CBL")'> RasbPi (SAT/CBL) </button>
 
-    Status
-    <ul>
-        <li>MU: {{ denon_status.MU }}</li>
-        <li>SI: {{ denon_status.SI }}</li>
-        <li>MV: {{ denon_status.MV }}</li>
-        <li>PW: {{ denon_status.PW }}</li>
-    </ul>
+        <div>MU: {{ denon_status.MU }}</div>
+        <div>SI: {{ denon_status.SI }}</div>
+        <div>MV: {{ denon_status.MV }}</div>
+        <div>PW: {{ denon_status.PW }}</div>
+    </div>
 
 </div> <!-- end container -->
 
