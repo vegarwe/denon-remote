@@ -169,11 +169,11 @@ INDEX_HTML = """
         </div>
         <div class="col-md-4 split">
             <button ng-click='put_cmd("MVUP")'                        > Up </button>
-            <button ng-click='put_cmd("MUON")'                        > mute </button>
+            <button ng-click='put_cmd("MUON")'                        > Mute </button>
         </div>
         <div class="col-md-4 split">
             <button ng-click='put_cmd("MVDOWN")'                      > Down </button>
-            <button ng-click='put_cmd("MUOFF")'                       > unmute </button>
+            <button ng-click='put_cmd("MUOFF")'                       > Unmute </button>
         </div>
         <div class="col-md-4"><button ng-click='post_cmd("SIDVD")'    > Chromecast (DVD) </button></div>
         <div class="col-md-4"><button ng-click='post_cmd("SITV")'     > TV </button></div>
