@@ -80,6 +80,7 @@ class Denon(object):
                 self.status['MV'] = volume
 
         for client in WSHandler.participants:
+            #print "client", client
             client.write_message(self.status)
 
 class WSHandler(tornado.websocket.WebSocketHandler):
@@ -164,23 +165,23 @@ INDEX_HTML = """
     Input
     <div class="row">
         <div class="col-md-4 split">
-            <button ng-click='post_cmd("PWON")'     > ON </button>
-            <button ng-click='post_cmd("PWSTANDBY")'> STANDBY </button>
+            <button ng-click='put_cmd("PWON")'                       > ON </button>
+            <button ng-click='put_cmd("PWSTANDBY")'                  > STANDBY </button>
         </div>
         <div class="col-md-4 split">
-            <button ng-click='put_cmd("MVUP")'                        > Up </button>
-            <button ng-click='put_cmd("MUON")'                        > Mute </button>
+            <button ng-click='put_cmd("MVUP")'                       > Up </button>
+            <button ng-click='put_cmd("MUON")'                       > Mute </button>
         </div>
         <div class="col-md-4 split">
-            <button ng-click='put_cmd("MVDOWN")'                      > Down </button>
-            <button ng-click='put_cmd("MUOFF")'                       > Unmute </button>
+            <button ng-click='put_cmd("MVDOWN")'                     > Down </button>
+            <button ng-click='put_cmd("MUOFF")'                      > Unmute </button>
         </div>
-        <div class="col-md-4"><button ng-click='post_cmd("SIDVD")'    > Chromecast (DVD) </button></div>
-        <div class="col-md-4"><button ng-click='post_cmd("SITV")'     > TV </button></div>
-        <div class="col-md-4"><button ng-click='post_cmd("SIVCR")'    > Jack plug (VCR/iPod) </button></div>
-        <div class="col-md-4"><button ng-click='post_cmd("SIHDP")'    > HDMI plug (HDP) </button></div>
-        <div class="col-md-4"><button ng-click='post_cmd("SITUNER")'  > Radio (TUNER) </button></div>
-        <div class="col-md-4"><button ng-click='post_cmd("SISAT/CBL")'> RasbPi (SAT/CBL) </button></div>
+        <div class="col-md-4"><button ng-click='put_cmd("SIDVD")'    > Chromecast (DVD) </button></div>
+        <div class="col-md-4"><button ng-click='put_cmd("SITV")'     > TV </button></div>
+        <div class="col-md-4"><button ng-click='put_cmd("SIVCR")'    > Jack plug (VCR/iPod) </button></div>
+        <div class="col-md-4"><button ng-click='put_cmd("SIHDP")'    > HDMI plug (HDP) </button></div>
+        <div class="col-md-4"><button ng-click='put_cmd("SITUNER")'  > Radio (TUNER) </button></div>
+        <div class="col-md-4"><button ng-click='put_cmd("SISAT/CBL")'> RasbPi (SAT/CBL) </button></div>
     </div>
 
     Status
@@ -202,18 +203,18 @@ INDEX_HTML = """
 
         $scope.get_status = function () {
             $http.get("/api/status")
-               .success(function(data, status, headers, config) {
-                   $scope.denon_status = data;
-               }).error(function(data, status, headers, config) {
-                   $scope.errorMsg = "Failed to get status";
-                   console.log($scope.errorMsg);
-               });
+                .success(function(data, status, headers, config) {
+                    $scope.denon_status = data;
+                }).error(function(data, status, headers, config) {
+                    $scope.errorMsg = "Failed to get status";
+                    console.log($scope.errorMsg);
+                });
         }
 
         $scope.put_cmd = function (cmd) {
             $http.put("/api/cmd", {'cmd': cmd})
-                  .success(function(data, status, headers, config) {
-                         //$scope.denon_status = data;
+                .success(function(data, status, headers, config) {
+                    //$scope.denon_status = data;
                 }).error(function(data, status, headers, config) {
                     $scope.errorMsg = "Failed to mute";
                     console.log($scope.errorMsg);
@@ -224,7 +225,8 @@ INDEX_HTML = """
         $scope.request_status = function () {
             console.log("request_status");
             $http.put("/api/request_status")
-                  .success(function(data, status, headers, config) {
+                .success(function(data, status, headers, config) {
+                    //
                 }).error(function(data, status, headers, config) {
                     $scope.errorMsg = "Failed to mute";
                     console.log($scope.errorMsg);
@@ -236,7 +238,8 @@ INDEX_HTML = """
             $scope.ws = new WebSocket("ws://" + $location.host() + ":" + $location.port() + "/ws");
 
             $scope.ws.onmessage = function(evt) {
-                console.log("onmessage: " + evt.data)
+                $scope.denon_status = JSON.parse(evt.data);
+                $scope.$apply();
             };
 
             $scope.ws.onclose = function(evt) {
