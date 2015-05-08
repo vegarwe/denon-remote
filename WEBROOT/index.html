@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html ng-app="fiskenApp">
+    <head>
+        <title>Title goes here.</title>
+        <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.14/angular.min.js"></script>
+    </head>
+    <body ng-controller="FiskenCtrl">
+        <pre>{{ denon_status }}</pre>
+        <button ng-click='post_cmd("MUON")'         class='muteButton'> mute </button>
+        <button ng-click='post_cmd("MUOFF")'        class='muteButton'> unmute </button>
+        <button ng-click='post_cmd("SISAT/CBL")'    class='muteButton'> SAT/CBL </button>
+        <button ng-click='post_cmd("SITV")'         class='muteButton'> TV </button>
+        <button ng-click='post_cmd("SI?")'          class='muteButton'> SI? </button>
+    </body>
+
+    <script type="text/javascript">
+        var fiskenApp = angular.module('fiskenApp', []);
+
+        fiskenApp.controller('FiskenCtrl', function ($scope, $http) {
+            console.log("Fisken");
+
+            $scope.getStatus = function () {
+                $http.get("http://192.168.1.13:8080/api/status")
+                   .success(function(data, status, headers, config) {
+                       $scope.denon_status = data;
+                   }).error(function(data, status, headers, config) {
+                       $scope.errorMsg = "Failed to get status";
+                   });
+            }
+
+            $scope.post_cmd = function (cmd) {
+                console.log("post_cmd " + cmd);
+                $http.put("http://192.168.1.13:8080/api/cmd", cmd)
+                      .success(function(data, status, headers, config) {
+                             $scope.denon_status = data;
+                    }).error(function(data, status, headers, config) {
+                           $scope.errorMsg = "Failed to mute";
+                    });
+
+            }
+            
+            $scope.getStatus();
+
+        });
+    </script>
+
+</html>
+
