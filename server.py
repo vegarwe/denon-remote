@@ -1,10 +1,11 @@
 import os
+import re
+import sys
 import json
 import time
 import serial
 import threading
 import BaseHTTPServer
-from mimetypes import types_map
 
 HOST_NAME = ''
 PORT_NUMBER = 8080
@@ -13,11 +14,11 @@ PORT_NUMBER = 8080
 
 class Denon(object):
     def __init__(self, port='/dev/ttyAMA0', baudrate=9600):
-        self.s = serial.Serial(port, timeout=.3, baudrate=baudrate)
+        self.s = serial.Serial(port, timeout=.1, baudrate=baudrate)
         self.status = {}
 
     def cmd(self, cmd):
-        print "self.s.write %r" % cmd
+        print "write %r" % cmd
         self.s.write('%s\r' % cmd)
 
     def request_status(self):
@@ -30,34 +31,53 @@ class Denon(object):
 
     def start(self):
         self.t1_stop = threading.Event()
-        self.t1 = threading.Thread(target=self._read)
+        self.t1 = threading.Thread(target=self.run)
         self.t1.start()
+        time.sleep(.01) # Allow read thread to start
 
     def stop(self):
         self.t1_stop.set()
         self.t1.join()
 
     def _read(self):
+        data = ''
         while not self.t1_stop.is_set():
-            #self.t1_stop.wait(1)
-            data = ''
-            while not data.endswith('\r'):
-                tmp = self.s.read(512) # wait for timeout
-                data += tmp
-                if tmp == '': break
-            print '_read %r' % data
-            for i in data.split('\r'):
-                self._parse_return(i)
-        return data
+            tmp = self.s.read(1) # Wait for read timeout
+            if tmp == '':
+                continue
+            data += tmp + self.s.read(self.s.inWaiting()) # Read all buffered
+
+            print 'read buffer %r' % data
+            i = data.find('\r')
+            while i >= 0:
+                yield data[:i]
+                data = data[i+1:]
+                i = data.find('\r')
+
+    def run(self):
+        for i in self._read():
+            self._parse_return(i)
 
     def _parse_return(self, data):
+        print '_parse_return %r' % (data)
+        MV = re.compile('MV([0-9]{1,2})([0-9]*)')
         if data.startswith("MU"):
             self.status['MU'] = data.rstrip('\r')
+            return
         if data.startswith("SI"):
             self.status['SI'] = data.rstrip('\r')
-        print '_parse_return %r %s' % (data, self.status)
+            return
 
-denon = Denon()
+        m = MV.search(data)
+        if m:
+            volume = 1 + int(m.group(1)) # Is of by one for some reason
+            if m.group(2) != '':
+                volume += int(m.group(2)) / 10.
+            self.status['MV'] = volume
+            print '%r' % self.status
+            return
+
+denon = None
 
 class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
@@ -71,21 +91,11 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         if self.path.startswith('/api/'):
             return self.get_api()
 
-        if self.path == '/':
-            self.path = '/index.html'
-
-        fname,ext = os.path.splitext(self.path)
-        if ext in (".html", ".css"):
-            try:
-                with open(os.path.join('WEBROOT', self.path.lstrip('/'))) as f:
-                    self.send_response(200)
-                    self.send_header('Content-type', types_map[ext])
-                    self.end_headers()
-                    self.wfile.write(f.read())
-            except IOError:
-                self.send_error(404)
-        else:
-            self.send_error(404)
+        if self.path == '/' or self.path == '/index.html':
+            self.send_response(200)
+            self.send_header("Content-type", "text/html")
+            self.end_headers()
+            self.wfile.write(INDEX_HTML)
 
     def put_api(self):
         self.send_response(200)
@@ -115,7 +125,86 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
         json.dump(denon.status, self.wfile)
 
+INDEX_HTML = """
+<!DOCTYPE html>
+<html ng-app="denonRemoteApp">
+    <head>
+        <title>Title goes here.</title>
+        <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.14/angular.min.js"></script>
+        <style>
+            .input li {
+                list-style: none;
+            }
+            .input button {
+                padding: 15px;
+                margin:   5px;
+                width:  200px;
+            }
+        </style>
+    </head>
+    <body ng-controller="DenonCtrl">
+        <ul class='input'>
+            <li><button ng-click='post_cmd("MUON")'         class='button'> mute </button></li>
+            <li><button ng-click='post_cmd("MUOFF")'        class='button'> unmute </button></li>
+            <li><button ng-click='post_cmd("SIDVD")'        class='button'> Chromecast (DVD) </button></li>
+            <li><button ng-click='post_cmd("SITV")'         class='button'> TV </button></li>
+            <li><button ng-click='post_cmd("SIVCR")'        class='button'> Jack plug (VCR/iPod) </button></li>
+            <li><button ng-click='post_cmd("SIHDP")'        class='button'> HDMI plug (HDP) </button></li>
+            <li><button ng-click='post_cmd("SITUNER")'      class='button'> Radio (TUNER) </button></li>
+            <li><button ng-click='post_cmd("SISAT/CBL")'    class='button'> RasbPi (SAT/CBL) </button></li>
+        </ul>
+
+        Status
+        <ul>
+            <li>MU: {{ denon_status.MU }}</li>
+            <li>SI: {{ denon_status.SI }}</li>
+            <li>MV: {{ denon_status.MV }}</li>
+        </ul>
+    </body>
+
+    <script type="text/javascript">
+        var denonRemoteApp = angular.module('denonRemoteApp', []);
+
+        denonRemoteApp.controller('DenonCtrl', function ($scope, $http, $interval) {
+            $scope.getStatus = function () {
+                $http.get("http://192.168.1.13:8080/api/status")
+                   .success(function(data, status, headers, config) {
+                       $scope.denon_status = data;
+                   }).error(function(data, status, headers, config) {
+                       $scope.errorMsg = "Failed to get status";
+                   });
+            }
+
+            $scope.post_cmd = function (cmd) {
+                console.log("post_cmd " + cmd);
+                $http.put("http://192.168.1.13:8080/api/cmd", cmd)
+                      .success(function(data, status, headers, config) {
+                             //$scope.denon_status = data;
+                    }).error(function(data, status, headers, config) {
+                           $scope.errorMsg = "Failed to mute";
+                    });
+
+            }
+
+            $scope.getStatus();
+            //var timer=$interval(function() {
+            //    console.log("timer");
+            //    $scope.getStatus();
+            //}, 5000);
+
+        });
+    </script>
+
+</html>
+"""
+
 if __name__ == '__main__':
+    denon = Denon()
+    if len(sys.argv) == 2:
+        denon.cmd(sys.argv[1])
+        print '%s: %r' % (sys.argv[1], denon.s.read(512))
+        raise SystemExit(0)
+
     denon.start()
     denon.request_status() # TODO: Exit if failing
 
