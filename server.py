@@ -22,7 +22,7 @@ class Denon(object):
         self.status = {}
 
     def cmd(self, cmd):
-        print "cmd %r" % cmd
+        print "cmd   %r" % cmd
         self.s.write('%s\r' % cmd)
 
     def request_status(self):
@@ -124,9 +124,10 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         if self.path == '/api/cmd':
             length = int(self.headers['Content-Length'])
             content = self.rfile.read(length)
-            print 'content: %r' % content
             denon.cmd(content)
             json.dump(denon.status, self.wfile)
+        elif self.path == '/api/request_status':
+            denon.request_status()
         else:
             self.send_error(404)
             return
@@ -144,6 +145,7 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
         json.dump(denon.status, self.wfile)
 
+# TODO: Show errorMsg
 INDEX_HTML = """
 <!DOCTYPE html>
 <html ng-app="denonRemoteApp">
@@ -172,19 +174,23 @@ INDEX_HTML = """
     <body ng-controller="DenonCtrl">
         <ul class='input'>
             <li class='split'>
-                <button ng-click='post_cmd("PWON")'         class='button'> ON </button>
-                <button ng-click='post_cmd("PWSTANDBY")'    class='button'> STANDBY </button>
+                <button ng-click='put_cmd("PWON")'                      class='button'> ON </button>
+                <button ng-click='put_cmd("PWSTANDBY")'                 class='button'> STANDBY </button>
             </li>
             <li class='split'>
-                <button ng-click='post_cmd("MUON")'         class='button'> mute </button>
-                <button ng-click='post_cmd("MUOFF")'        class='button'> unmute </button>
+                <button ng-click='put_cmd("MVUP")'                      class='button'> Up </button>
+                <button ng-click='put_cmd("MUON")'                      class='button'> mute </button>
             </li>
-            <li class='full'><button ng-click='post_cmd("SIDVD")'        class='button'> Chromecast (DVD) </button></li>
-            <li class='full'><button ng-click='post_cmd("SITV")'         class='button'> TV </button></li>
-            <li class='full'><button ng-click='post_cmd("SIVCR")'        class='button'> Jack plug (VCR/iPod) </button></li>
-            <li class='full'><button ng-click='post_cmd("SIHDP")'        class='button'> HDMI plug (HDP) </button></li>
-            <li class='full'><button ng-click='post_cmd("SITUNER")'      class='button'> Radio (TUNER) </button></li>
-            <li class='full'><button ng-click='post_cmd("SISAT/CBL")'    class='button'> RasbPi (SAT/CBL) </button></li>
+            <li class='split'>
+                <button ng-click='put_cmd("MVDOWN")'                    class='button'> Down </button>
+                <button ng-click='put_cmd("MUOFF")'                     class='button'> unmute </button>
+            </li>
+            <li class='full'><button ng-click='put_cmd("SIDVD")'        class='button'> Chromecast (DVD) </button></li>
+            <li class='full'><button ng-click='put_cmd("SITV")'         class='button'> TV </button></li>
+            <li class='full'><button ng-click='put_cmd("SIVCR")'        class='button'> Jack plug (VCR/iPod) </button></li>
+            <li class='full'><button ng-click='put_cmd("SIHDP")'        class='button'> HDMI plug (HDP) </button></li>
+            <li class='full'><button ng-click='put_cmd("SITUNER")'      class='button'> Radio (TUNER) </button></li>
+            <li class='full'><button ng-click='put_cmd("SISAT/CBL")'    class='button'> RasbPi (SAT/CBL) </button></li>
         </ul>
 
         Status
@@ -194,6 +200,9 @@ INDEX_HTML = """
             <li>MV: {{ denon_status.MV }}</li>
             <li>PW: {{ denon_status.PW }}</li>
         </ul>
+        <ul class='input'>
+            <li class='full'><button ng-click='request_status()' class='button'> Request status </button></li>
+        </ul>
     </body>
 
     <script type="text/javascript">
@@ -201,7 +210,6 @@ INDEX_HTML = """
 
         denonRemoteApp.controller('DenonCtrl', function ($scope, $http, $interval) {
             $scope.get_status = function () {
-                console.log("get_status");
                 $http.get("http://192.168.1.13:8080/api/status")
                    .success(function(data, status, headers, config) {
                        $scope.denon_status = data;
@@ -210,8 +218,7 @@ INDEX_HTML = """
                    });
             }
 
-            $scope.post_cmd = function (cmd) {
-                console.log("post_cmd " + cmd);
+            $scope.put_cmd = function (cmd) {
                 $http.put("http://192.168.1.13:8080/api/cmd", cmd)
                       .success(function(data, status, headers, config) {
                              //$scope.denon_status = data;
@@ -221,9 +228,18 @@ INDEX_HTML = """
 
             }
 
-            $scope.get_status();
+            $scope.request_status = function () {
+                console.log("request_status");
+                $http.put("http://192.168.1.13:8080/api/request_status")
+                      .success(function(data, status, headers, config) {
+                    }).error(function(data, status, headers, config) {
+                           $scope.errorMsg = "Failed to mute";
+                    });
+
+            }
+
+            $scope.request_status();
             var timer=$interval(function() {
-                console.log("timer");
                 $scope.get_status();
             }, 2000);
 
