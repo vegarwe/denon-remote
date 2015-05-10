@@ -207,6 +207,11 @@ INDEX_HTML = """
         <li>MV: {{ denon_status.MV }}</li>
         <li>PW: {{ denon_status.PW }}</li>
     </ul>
+    <div class="row">
+        <div class="col-md-4">
+            <button ng-click='request_status()' class='button'> Request status </button></li>
+        </div>
+    </div>
 
 </div> <!-- end container -->
 
