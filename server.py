@@ -149,102 +149,113 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 INDEX_HTML = """
 <!DOCTYPE html>
 <html ng-app="denonRemoteApp">
-    <head>
-        <title>Title goes here.</title>
-        <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.14/angular.min.js"></script>
-        <style>
-            .input li {
-                list-style: none;
-            }
-            .input li {
-                width:  200px;
-            }
-            .input button {
-                padding: 10px;
-                margin:   5px;
-            }
-            .full button {
-                width:  90%;
-            }
-            .split button {
-                width:  41%;
-            }
-        </style>
-    </head>
-    <body ng-controller="DenonCtrl">
-        <ul class='input'>
-            <li class='split'>
-                <button ng-click='put_cmd("PWON")'                      class='button'> ON </button>
-                <button ng-click='put_cmd("PWSTANDBY")'                 class='button'> STANDBY </button>
-            </li>
-            <li class='split'>
-                <button ng-click='put_cmd("MVUP")'                      class='button'> Up </button>
-                <button ng-click='put_cmd("MUON")'                      class='button'> mute </button>
-            </li>
-            <li class='split'>
-                <button ng-click='put_cmd("MVDOWN")'                    class='button'> Down </button>
-                <button ng-click='put_cmd("MUOFF")'                     class='button'> unmute </button>
-            </li>
-            <li class='full'><button ng-click='put_cmd("SIDVD")'        class='button'> Chromecast (DVD) </button></li>
-            <li class='full'><button ng-click='put_cmd("SITV")'         class='button'> TV </button></li>
-            <li class='full'><button ng-click='put_cmd("SIVCR")'        class='button'> Jack plug (VCR/iPod) </button></li>
-            <li class='full'><button ng-click='put_cmd("SIHDP")'        class='button'> HDMI plug (HDP) </button></li>
-            <li class='full'><button ng-click='put_cmd("SITUNER")'      class='button'> Radio (TUNER) </button></li>
-            <li class='full'><button ng-click='put_cmd("SISAT/CBL")'    class='button'> RasbPi (SAT/CBL) </button></li>
-        </ul>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css">
+  <style>
+      .col-md-4.split button {
+          width:  151px;
+          padding: 12px;
+          margin:   2px;
+      }
+      .col-md-4 button {
+          width:  310px;
+          padding: 12px;
+          margin:   2px;
+      }
+  </style>
+  <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.14/angular.min.js"></script>
+</head>
+<body ng-controller="DenonCtrl">
 
-        Status
-        <ul>
-            <li>MU: {{ denon_status.MU }}</li>
-            <li>SI: {{ denon_status.SI }}</li>
-            <li>MV: {{ denon_status.MV }}</li>
-            <li>PW: {{ denon_status.PW }}</li>
-        </ul>
-        <ul class='input'>
-            <li class='full'><button ng-click='request_status()' class='button'> Request status </button></li>
-        </ul>
-    </body>
+<div class="container">
 
-    <script type="text/javascript">
-        var denonRemoteApp = angular.module('denonRemoteApp', []);
+    <!--
+    <div class="jumbotron">
+      <h1>W3Schools Demo</h1> 
+      <p>Resize this responsive page!</p> 
+    </div>
+    -->
+    
+    Input
+    <div class="row">
+        <div class="col-md-4 split">
+            <button ng-click='post_cmd("PWON")'     > ON </button>
+            <button ng-click='post_cmd("PWSTANDBY")'> STANDBY </button>
+        </div>
+        <div class="col-md-4 split">
+            <button ng-click='put_cmd("MVUP")'                        > Up </button>
+            <button ng-click='put_cmd("MUON")'                        > mute </button>
+        </div>
+        <div class="col-md-4 split">
+            <button ng-click='put_cmd("MVDOWN")'                      > Down </button>
+            <button ng-click='put_cmd("MUOFF")'                       > unmute </button>
+        </div>
+        <div class="col-md-4"><button ng-click='post_cmd("SIDVD")'    > Chromecast (DVD) </button></div>
+        <div class="col-md-4"><button ng-click='post_cmd("SITV")'     > TV </button></div>
+        <div class="col-md-4"><button ng-click='post_cmd("SIVCR")'    > Jack plug (VCR/iPod) </button></div>
+        <div class="col-md-4"><button ng-click='post_cmd("SIHDP")'    > HDMI plug (HDP) </button></div>
+        <div class="col-md-4"><button ng-click='post_cmd("SITUNER")'  > Radio (TUNER) </button></div>
+        <div class="col-md-4"><button ng-click='post_cmd("SISAT/CBL")'> RasbPi (SAT/CBL) </button></div>
+    </div>
 
-        denonRemoteApp.controller('DenonCtrl', function ($scope, $http, $interval) {
-            $scope.get_status = function () {
-                $http.get("http://192.168.1.13:8080/api/status")
-                   .success(function(data, status, headers, config) {
-                       $scope.denon_status = data;
-                   }).error(function(data, status, headers, config) {
-                       $scope.errorMsg = "Failed to get status";
-                   });
-            }
+    Status
+    <ul>
+        <li>MU: {{ denon_status.MU }}</li>
+        <li>SI: {{ denon_status.SI }}</li>
+        <li>MV: {{ denon_status.MV }}</li>
+        <li>PW: {{ denon_status.PW }}</li>
+    </ul>
 
-            $scope.put_cmd = function (cmd) {
-                $http.put("http://192.168.1.13:8080/api/cmd", cmd)
-                      .success(function(data, status, headers, config) {
-                             //$scope.denon_status = data;
-                    }).error(function(data, status, headers, config) {
-                           $scope.errorMsg = "Failed to mute";
-                    });
+</div> <!-- end container -->
 
-            }
+</body>
 
-            $scope.request_status = function () {
-                console.log("request_status");
-                $http.put("http://192.168.1.13:8080/api/request_status")
-                      .success(function(data, status, headers, config) {
-                    }).error(function(data, status, headers, config) {
-                           $scope.errorMsg = "Failed to mute";
-                    });
+<script type="text/javascript">
+    var denonRemoteApp = angular.module('denonRemoteApp', []);
+    
+    denonRemoteApp.controller('DenonCtrl', function ($scope, $http, $interval) {
 
-            }
-
-            $scope.request_status();
-            var timer=$interval(function() {
-                $scope.get_status();
-            }, 2000);
-
-        });
-    </script>
+        $scope.get_status = function () {
+            $http.get("http://192.168.1.13:8080/api/status")
+               .success(function(data, status, headers, config) {
+                   $scope.denon_status = data;
+               }).error(function(data, status, headers, config) {
+                   $scope.errorMsg = "Failed to get status";
+                   console.log($scope.errorMsg);
+               });
+        }
+    
+        $scope.put_cmd = function (cmd) {
+            $http.put("http://192.168.1.13:8080/api/cmd", cmd)
+                  .success(function(data, status, headers, config) {
+                         //$scope.denon_status = data;
+                }).error(function(data, status, headers, config) {
+                    $scope.errorMsg = "Failed to mute";
+                    console.log($scope.errorMsg);
+                });
+    
+        }
+    
+        $scope.request_status = function () {
+            console.log("request_status");
+            $http.put("http://192.168.1.13:8080/api/request_status")
+                  .success(function(data, status, headers, config) {
+                }).error(function(data, status, headers, config) {
+                    $scope.errorMsg = "Failed to mute";
+                    console.log($scope.errorMsg);
+                });
+    
+        }
+    
+        $scope.request_status();
+        var timer=$interval(function() {
+            $scope.get_status();
+        }, 2000);
+    
+    });
+</script>
 
 </html>
 """
