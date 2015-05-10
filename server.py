@@ -1,16 +1,14 @@
+import json
 import os
 import re
-import sys
-import json
-import time
 import serial
+import sys
+import time
 import threading
 import tornado.ioloop
 import tornado.httpserver
 import tornado.web
 import tornado.websocket
-
-script_path = os.path.dirname(os.path.realpath(sys.argv[0]))
 
 class Denon(object):
     MV = re.compile('MV([0-9]{1,2})([0-9]*)')
@@ -81,47 +79,8 @@ class Denon(object):
                     volume += int(m.group(2)) / 10.
                 self.status['MV'] = volume
 
-denon = None
-
-class MainHandler(tornado.web.RequestHandler):
-
-    def put(self, path):
-        print 'put', path
         for client in WSHandler.participants:
-            client.write_message("Hello World %r", path)
-
-        if path == 'api/cmd':
-            d = json.loads(self.request.body)
-            denon.cmd(d['cmd'])
-            self.set_status(200)
-            self.write(denon.status)
-        elif path == 'api/request_status':
-            denon.request_status()
-            self.set_status(200)
-            self.write('OK')
-        else:
-            self.send_error(405)
-
-    def get(self, path):
-        print 'get', path
-
-        if path.startswith('/api/'):
-            return self._get_api()
-
-        if path == '' or path == 'index.html':
-            self.set_status(200)
-            self.set_header("Content-type", "text/html")
-            self.write(INDEX_HTML)
-        else:
-            self.send_error(404)
-
-
-    def _get_api(self):
-        if self.path == '/api/status':
-            self.set_status(200)
-            self.write(denon.status)
-        else:
-            self.send_error(405)
+            client.write_message(self.status)
 
 class WSHandler(tornado.websocket.WebSocketHandler):
     participants = set()
@@ -137,11 +96,37 @@ class WSHandler(tornado.websocket.WebSocketHandler):
         print 'connection closed'
         self.participants.remove(self)
 
-application = tornado.web.Application([
-    (r'/ws', WSHandler),
-    (r"/static/(.*)", tornado.web.StaticFileHandler, dict(path=script_path)),
-    (r'/(.*)', MainHandler),
-])
+class MainHandler(tornado.web.RequestHandler):
+    denon = None
+
+    def put(self, path):
+        if not denon:
+            self.send_error(412)
+            return
+
+        if path == 'api/cmd':
+            d = json.loads(self.request.body)
+            denon.cmd(d['cmd'])
+            self.set_status(200)
+            self.write(denon.status)
+        elif path == 'api/request_status':
+            denon.request_status()
+            self.set_status(200)
+            self.write('OK')
+        else:
+            self.send_error(405)
+
+    def get(self, path):
+        if path == '/api/status':
+            self.set_status(200)
+            self.write(denon.status)
+        elif path == '' or path == 'index.html':
+            self.set_status(200)
+            self.set_header("Content-type", "text/html")
+            self.write(INDEX_HTML)
+        else:
+            self.send_error(404)
+
 
 # TODO: Show errorMsg
 INDEX_HTML = """
@@ -205,11 +190,6 @@ INDEX_HTML = """
         <li>MV: {{ denon_status.MV }}</li>
         <li>PW: {{ denon_status.PW }}</li>
     </ul>
-    <div class="row">
-        <div class="col-md-4">
-            <button ng-click='request_status()' class='button'> Request status </button></li>
-        </div>
-    </div>
 
 </div> <!-- end container -->
 
@@ -276,6 +256,14 @@ INDEX_HTML = """
 </html>
 """
 
+script_path = os.path.dirname(os.path.realpath(sys.argv[0]))
+
+application = tornado.web.Application([
+    (r'/ws', WSHandler),
+    (r"/static/(.*)", tornado.web.StaticFileHandler, dict(path=script_path)),
+    (r'/(.*)', MainHandler),
+])
+
 if __name__ == '__main__':
     denon = Denon()
     if len(sys.argv) == 2:
@@ -285,6 +273,7 @@ if __name__ == '__main__':
 
     denon.start()
     denon.request_status() # TODO: Exit if failing
+    MainHandler.denon = denon
 
     http_server = tornado.httpserver.HTTPServer(application)
     http_server.listen(8080)
