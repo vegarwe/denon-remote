@@ -5,14 +5,12 @@ import json
 import time
 import serial
 import threading
-import BaseHTTPServer
-from mimetypes import types_map
+import tornado.ioloop
+import tornado.httpserver
+import tornado.web
+import tornado.websocket
 
-HOST_NAME = ''
-PORT_NUMBER = 8080
 script_path = os.path.dirname(os.path.realpath(sys.argv[0]))
-
-#default_handler = SimpleHTTPServer.SimpleHTTPRequestHandler
 
 class Denon(object):
     MV = re.compile('MV([0-9]{1,2})([0-9]*)')
@@ -27,8 +25,11 @@ class Denon(object):
 
     def request_status(self):
         self.cmd("MU?")
+        time.sleep(.001)
         self.cmd("SI?")
+        time.sleep(.001)
         self.cmd("PW?")
+        time.sleep(.001)
         self.cmd("MV?")
         return self.status
 
@@ -82,68 +83,65 @@ class Denon(object):
 
 denon = None
 
-class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+class MainHandler(tornado.web.RequestHandler):
 
-    def do_PUT(self):
-        if self.path.startswith('/api/'):
-            return self.put_api()
-        self.send_error(404)
+    def put(self, path):
+        print 'put', path
+        for client in WSHandler.participants:
+            client.write_message("Hello World %r", path)
 
-    def do_GET(self):
-
-        if self.path.startswith('/api/'):
-            return self.get_api()
-
-        if self.path == '/' or self.path == '/index.html':
-            self.send_response(200)
-            self.send_header("Content-type", "text/html")
-            self.end_headers()
-            self.wfile.write(INDEX_HTML)
-        else:
-            fname,ext = os.path.splitext(self.path)
-            if ext in (".html", ".css"):
-                try:
-                    full_file_name = os.path.join(script_path, self.path.lstrip('/'))
-                    with open(full_file_name) as f:
-                        self.send_response(200)
-                        self.send_header('Content-type', types_map[ext])
-                        self.end_headers()
-                        self.wfile.write(f.read())
-                except IOError:
-                    print 'file not found %r' % full_file_name
-                    self.send_error(404)
-            else:
-                self.send_error(404)
-
-
-    def put_api(self):
-        self.send_response(200)
-        self.send_header("Content-type", "application/json")
-        self.end_headers()
-
-        if self.path == '/api/cmd':
-            length = int(self.headers['Content-Length'])
-            content = self.rfile.read(length)
-            denon.cmd(content)
-            json.dump(denon.status, self.wfile)
-        elif self.path == '/api/request_status':
+        if path == 'api/cmd':
+            d = json.loads(self.request.body)
+            denon.cmd(d['cmd'])
+            self.set_status(200)
+            self.write(denon.status)
+        elif path == 'api/request_status':
             denon.request_status()
+            self.set_status(200)
+            self.write('OK')
+        else:
+            self.send_error(405)
+
+    def get(self, path):
+        print 'get', path
+
+        if path.startswith('/api/'):
+            return self._get_api()
+
+        if path == '' or path == 'index.html':
+            self.set_status(200)
+            self.set_header("Content-type", "text/html")
+            self.write(INDEX_HTML)
         else:
             self.send_error(404)
-            return
 
-    def get_api(self):
+
+    def _get_api(self):
         if self.path == '/api/status':
-            return self.get_status()
+            self.set_status(200)
+            self.write(denon.status)
         else:
-            self.send_error(404)
+            self.send_error(405)
 
-    def get_status(self):
-        self.send_response(200)
-        self.send_header("Content-type", "application/json")
-        self.end_headers()
+class WSHandler(tornado.websocket.WebSocketHandler):
+    participants = set()
 
-        json.dump(denon.status, self.wfile)
+    def open(self):
+        print 'connection opened'
+        self.participants.add(self)
+
+    def on_message(self, message):
+        print 'message received %s' % message
+
+    def on_close(self):
+        print 'connection closed'
+        self.participants.remove(self)
+
+application = tornado.web.Application([
+    (r'/ws', WSHandler),
+    (r"/static/(.*)", tornado.web.StaticFileHandler, dict(path=script_path)),
+    (r'/(.*)', MainHandler),
+])
 
 # TODO: Show errorMsg
 INDEX_HTML = """
@@ -173,11 +171,11 @@ INDEX_HTML = """
 
     <!--
     <div class="jumbotron">
-      <h1>W3Schools Demo</h1> 
-      <p>Resize this responsive page!</p> 
+      <h1>W3Schools Demo</h1>
+      <p>Resize this responsive page!</p>
     </div>
     -->
-    
+
     Input
     <div class="row">
         <div class="col-md-4 split">
@@ -219,11 +217,11 @@ INDEX_HTML = """
 
 <script type="text/javascript">
     var denonRemoteApp = angular.module('denonRemoteApp', []);
-    
-    denonRemoteApp.controller('DenonCtrl', function ($scope, $http, $interval) {
+
+    denonRemoteApp.controller('DenonCtrl', function ($scope, $http, $interval, $location) {
 
         $scope.get_status = function () {
-            $http.get("http://192.168.1.13:8080/api/status")
+            $http.get("/api/status")
                .success(function(data, status, headers, config) {
                    $scope.denon_status = data;
                }).error(function(data, status, headers, config) {
@@ -231,34 +229,47 @@ INDEX_HTML = """
                    console.log($scope.errorMsg);
                });
         }
-    
+
         $scope.put_cmd = function (cmd) {
-            $http.put("http://192.168.1.13:8080/api/cmd", cmd)
+            $http.put("/api/cmd", {'cmd': cmd})
                   .success(function(data, status, headers, config) {
                          //$scope.denon_status = data;
                 }).error(function(data, status, headers, config) {
                     $scope.errorMsg = "Failed to mute";
                     console.log($scope.errorMsg);
                 });
-    
+
         }
-    
+
         $scope.request_status = function () {
             console.log("request_status");
-            $http.put("http://192.168.1.13:8080/api/request_status")
+            $http.put("/api/request_status")
                   .success(function(data, status, headers, config) {
                 }).error(function(data, status, headers, config) {
                     $scope.errorMsg = "Failed to mute";
                     console.log($scope.errorMsg);
                 });
-    
+
         }
-    
-        $scope.request_status();
-        var timer=$interval(function() {
-            $scope.get_status();
-        }, 2000);
-    
+
+        connect = function() {
+            $scope.ws = new WebSocket("ws://" + $location.host() + ":" + $location.port() + "/ws");
+
+            $scope.ws.onmessage = function(evt) {
+                console.log("onmessage: " + evt.data)
+            };
+
+            $scope.ws.onclose = function(evt) {
+                console.log("onclose");
+            };
+
+            $scope.ws.onopen = function(evt) {
+                console.log("onopen");
+            };
+        }
+
+        connect();
+
     });
 </script>
 
@@ -275,12 +286,13 @@ if __name__ == '__main__':
     denon.start()
     denon.request_status() # TODO: Exit if failing
 
-    httpd = BaseHTTPServer.HTTPServer((HOST_NAME, PORT_NUMBER), MyHandler)
+    http_server = tornado.httpserver.HTTPServer(application)
+    http_server.listen(8080)
     try:
-        httpd.serve_forever()
+        tornado.ioloop.IOLoop.instance().start()
     except KeyboardInterrupt:
         pass
-    httpd.server_close()
 
+    tornado.ioloop.IOLoop.instance().stop() # TODO: Do we need to stop?
     denon.stop()
     denon.close()
