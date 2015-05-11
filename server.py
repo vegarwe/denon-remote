@@ -45,6 +45,7 @@ class Denon(object):
         self.t1.join()
 
     def run(self):
+        print "read thread started"
         for event in self._get_event():
             print 'event %r' % (event)
             self._parse_event(event)
