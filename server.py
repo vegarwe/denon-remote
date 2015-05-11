@@ -285,3 +285,4 @@ if __name__ == '__main__':
     tornado.ioloop.IOLoop.instance().stop() # TODO: Do we need to stop?
     denon.stop()
     denon.close()
+
