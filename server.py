@@ -23,11 +23,11 @@ class Denon(object):
 
     def request_status(self):
         self.cmd("MU?")
-        time.sleep(.001)
+        time.sleep(.01)
         self.cmd("SI?")
-        time.sleep(.001)
+        time.sleep(.01)
         self.cmd("PW?")
-        time.sleep(.001)
+        time.sleep(.01)
         self.cmd("MV?")
         return self.status
 
