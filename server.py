@@ -18,7 +18,7 @@ class Denon(object):
         self.status = {}
 
     def cmd(self, cmd):
-        print "cmd   %r" % cmd
+        #print "cmd   %r" % cmd
         self.s.write('%s\r' % cmd)
 
     def request_status(self):
@@ -46,7 +46,7 @@ class Denon(object):
 
     def run(self):
         for event in self._get_event():
-            print 'event %r' % (event)
+            #print 'event %r' % (event)
             self._parse_event(event)
 
     def _get_event(self):
@@ -87,14 +87,15 @@ class WSHandler(tornado.websocket.WebSocketHandler):
     participants = set()
 
     def open(self):
-        print 'connection opened'
+        #print 'connection opened'
         self.participants.add(self)
 
     def on_message(self, message):
-        print 'message received %s' % message
+        pass
+        #print 'message received %s' % message
 
     def on_close(self):
-        print 'connection closed'
+        #print 'connection closed'
         self.participants.remove(self)
 
 class MainHandler(tornado.web.RequestHandler):
@@ -137,6 +138,7 @@ INDEX_HTML = """
     <title>Raiom remote</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="shortcut icon" href="static/favicon.ico">
     <link rel="stylesheet" href="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css">
     <style>
         button {
@@ -264,7 +266,7 @@ if __name__ == '__main__':
     denon = Denon()
     if len(sys.argv) == 2:
         denon.cmd(sys.argv[1])
-        print '%s: %r' % (sys.argv[1], denon.s.read(512))
+        #print '%s: %r' % (sys.argv[1], denon.s.read(512))
         raise SystemExit(0)
 
     denon.start()
@@ -272,7 +274,7 @@ if __name__ == '__main__':
     MainHandler.denon = denon
 
     http_server = tornado.httpserver.HTTPServer(application)
-    http_server.listen(8080)
+    http_server.listen(80)
     try:
         tornado.ioloop.IOLoop.instance().start()
     except KeyboardInterrupt:
