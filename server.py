@@ -125,134 +125,14 @@ class MainHandler(tornado.web.RequestHandler):
         elif path == '' or path == 'index.html':
             self.set_status(200)
             self.set_header("Content-type", "text/html")
-            self.write(INDEX_HTML)
+            self.write(open('index.html').read())
+        elif path in ['sw.js']:
+            self.set_status(200)
+            self.set_header("Content-type", "text/javascript")
+            self.write(open(path).read())
         else:
             self.send_error(404)
 
-
-# TODO: Show errorMsg
-INDEX_HTML = """
-<!DOCTYPE html>
-<html ng-app="denonRemoteApp">
-<head>
-    <title>Raiom remote</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="shortcut icon" href="static/favicon.ico">
-    <link rel="stylesheet" href="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css">
-    <style>
-        button {
-            width:         151px;
-            height:         40px;
-            margin:          5px;
-            margin-bottom:   8px !important;
-        }
-
-        table {
-            margin-left:    10px;
-            font-size:      20px;
-        }
-        td {
-            padding-left:         10px;
-        }
-
-    </style>
-    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.14/angular.min.js"></script>
-</head>
-<body ng-controller="DenonCtrl">
-
-<div class="container">
-
-    Input
-    <div>
-        <button class="btn" ng-click='put_cmd("PWON")'     > ON </button>
-        <button class="btn" ng-click='put_cmd("PWSTANDBY")'> STANDBY </button>
-        <button class="btn" ng-click='put_cmd("MVUP")'     > Up </button>
-        <button class="btn" ng-click='put_cmd("MVDOWN")'   > Down </button>
-        <button class="btn" ng-click='put_cmd("MUON")'     > Mute </button>
-        <button class="btn" ng-click='put_cmd("MUOFF")'    > Unmute </button>
-        <button class="btn" ng-click='put_cmd("SIDVD")'    > Chromecast (DVD) </button>
-        <button class="btn" ng-click='put_cmd("SITV")'     > TV </button>
-        <button class="btn" ng-click='put_cmd("SIVCR")'    > Jack plug (VCR/iPod) </button>
-        <button class="btn" ng-click='put_cmd("SIHDP")'    > HDMI plug (HDP) </button>
-        <button class="btn" ng-click='put_cmd("SITUNER")'  > Radio (TUNER) </button>
-        <button class="btn" ng-click='put_cmd("SISAT/CBL")'> RasbPi (SAT/CBL) </button>
-
-        <table class='status'>
-            <tr><th>MU:</th><td>{{ denon_status.MU }}</td></tr>
-            <tr><th>SI:</th><td>{{ denon_status.SI }}</td></tr>
-            <tr><th>MV:</th><td>{{ denon_status.MV }}</td></tr>
-            <tr><th>PW:</th><td>{{ denon_status.PW }}</td></tr>
-        </table>
-    </div>
-
-</div> <!-- end container -->
-
-</body>
-
-<script type="text/javascript">
-    var denonRemoteApp = angular.module('denonRemoteApp', []);
-
-    denonRemoteApp.controller('DenonCtrl', function ($scope, $http, $interval, $location) {
-
-        $scope.get_status = function () {
-            $http.get("/api/status")
-                .success(function(data, status, headers, config) {
-                    $scope.denon_status = data;
-                }).error(function(data, status, headers, config) {
-                    $scope.errorMsg = "Failed to get status";
-                    console.log($scope.errorMsg);
-                });
-        }
-
-        $scope.put_cmd = function (cmd) {
-            $http.put("/api/cmd", {'cmd': cmd})
-                .success(function(data, status, headers, config) {
-                    //$scope.denon_status = data;
-                }).error(function(data, status, headers, config) {
-                    $scope.errorMsg = "Failed to mute";
-                    console.log($scope.errorMsg);
-                });
-
-        }
-
-        $scope.request_status = function () {
-            console.log("request_status");
-            $http.put("/api/request_status")
-                .success(function(data, status, headers, config) {
-                    //
-                }).error(function(data, status, headers, config) {
-                    $scope.errorMsg = "Failed to mute";
-                    console.log($scope.errorMsg);
-                });
-
-        }
-
-        connect = function() {
-            $scope.ws = new WebSocket("ws://" + $location.host() + ":" + $location.port() + "/ws");
-
-            $scope.ws.onmessage = function(evt) {
-                $scope.denon_status = JSON.parse(evt.data);
-                $scope.$apply();
-            };
-
-            $scope.ws.onclose = function(evt) {
-                console.log("onclose");
-            };
-
-            $scope.ws.onopen = function(evt) {
-                console.log("onopen");
-            };
-        }
-        $scope.get_status();
-
-        connect();
-
-    });
-</script>
-
-</html>
-"""
 
 script_path = os.path.dirname(os.path.realpath(sys.argv[0]))
 
