@@ -1,12 +1,12 @@
 #!/bin/sh
 
 ### BEGIN INIT INFO
-# Provides:             ssh_tunnel
-# Required-Start:       $sshd
+# Provides:             denon_avr
+# Required-Start:
 # Required-Stop:
 # Default-Start:        2 3 4 5
 # Default-Stop:
-# Short-Description:    Simple SSH tunnel daemon
+# Short-Description:    Denon remote control HTTP daemon
 ### END INIT INFO
 
 # To install: sudo update-rc.d denon_avr.sh defaults
