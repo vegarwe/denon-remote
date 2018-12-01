@@ -4,7 +4,9 @@ import paho.mqtt.client as mqtt
 def main():
     client = mqtt.Client()
 
-    client.connect("iot.eclipse.org", 1883, 60)
+    #client.connect("iot.eclipse.org", 1883, 60)
+    client.username_pw_set("raiom", "FjaseFlyndreFisk")
+    client.connect("kanskje.de", 1883, 60)
 
     client.publish("/raiomremote/volume/up", "1")
 
