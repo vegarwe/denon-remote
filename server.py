@@ -9,6 +9,7 @@ import tornado.ioloop
 import tornado.httpserver
 import tornado.web
 import tornado.websocket
+import paho.mqtt.client as mqtt
 
 class Denon(object):
     MV = re.compile('MV([0-9]{1,2})([0-9]*)')
@@ -36,7 +37,7 @@ class Denon(object):
 
     def start(self):
         self.t1_stop = threading.Event()
-        self.t1 = threading.Thread(target=self.run)
+        self.t1 = threading.Thread(target=self._run)
         self.t1.start()
         time.sleep(.01) # Allow read thread to start
 
@@ -44,7 +45,7 @@ class Denon(object):
         self.t1_stop.set()
         self.t1.join()
 
-    def run(self):
+    def _run(self):
         for event in self._get_event():
             #print 'event %r' % (event)
             self._parse_event(event)
@@ -83,6 +84,52 @@ class Denon(object):
             #print "client", client
             client.write_message(self.status)
 
+class MQTTDenon(object):
+    def __init__(self, hostname, username, password):
+        self.mqtt_host  = hostname
+        self.mqtt_port  = 1883
+        self.mqtt_user  = username
+        self.mqtt_pass  = password
+        self.status     = {}
+        self.client     = mqtt.Client()
+        self.client.on_connect = self._on_connect
+        self.client.on_message = self._on_message
+
+    def cmd(self, cmd):
+        print("cmd   %r" % cmd)
+        self.client.publish("/raiomremote/cmd", cmd)
+
+    def request_status(self):
+        print("request_status")
+        self.client.publish("/raiomremote/request_status", "")
+        return self.status
+
+    def start(self):
+        print("start")
+        self.client.username_pw_set(self.mqtt_user, self.mqtt_pass)
+        self.client.connect(self.mqtt_host, self.mqtt_port, 60)
+        self.client.loop_start()
+
+    def stop(self):
+        print("stop")
+        self.client.loop_stop()
+        self.client.disconnect()
+
+    def close(self):
+        print("close")
+
+    def _on_connect(self, client, userdata, flags, rc):
+        print("Connected with result code %s" % rc)
+
+        # Subscribing in on_connect() means that if we lose the connection and
+        # reconnect then subscriptions will be renewed.
+        client.subscribe("/raiomremote/events/#")
+
+
+    def _on_message(self, client, userdata, msg):
+        print("Topic %s, payload %s" % (msg.topic, msg.payload))
+
+
 class WSHandler(tornado.websocket.WebSocketHandler):
     participants = set()
 
@@ -102,17 +149,18 @@ class MainHandler(tornado.web.RequestHandler):
     denon = None
 
     def put(self, path):
-        if not denon:
+        print('path %s' % path)
+        if not self.denon:
             self.send_error(412)
             return
 
         if path == 'api/cmd':
-            d = json.loads(self.request.body)
-            denon.cmd(d['cmd'])
+            d = json.loads(self.request.body.decode('utf-8'))
+            self.denon.cmd(d['cmd'])
             self.set_status(200)
-            self.write(denon.status)
+            self.write(self.denon.status)
         elif path == 'api/request_status':
-            denon.request_status()
+            self.denon.request_status()
             self.set_status(200)
             self.write('OK')
         else:
@@ -121,7 +169,7 @@ class MainHandler(tornado.web.RequestHandler):
     def get(self, path):
         if path == 'api/status':
             self.set_status(200)
-            self.write(denon.status)
+            self.write(self.denon.status)
         elif path == '' or path == 'index.html':
             self.set_status(200)
             self.set_header("Content-type", "text/html")
@@ -142,24 +190,25 @@ application = tornado.web.Application([
     (r'/(.*)', MainHandler),
 ])
 
-if __name__ == '__main__':
-    denon = Denon()
-    if len(sys.argv) == 2:
-        denon.cmd(sys.argv[1])
-        #print '%s: %r' % (sys.argv[1], denon.s.read(512))
-        raise SystemExit(0)
+def main():
+    #denon = Denon()
+    denon = MQTTDenon("kanskje.de", "raiom", "FjaseFlyndreFisk")
 
     denon.start()
-    denon.request_status() # TODO: Exit if failing
+    denon.request_status()
     MainHandler.denon = denon
 
     http_server = tornado.httpserver.HTTPServer(application)
-    http_server.listen(80)
+    http_server.listen(8383)
+    #http_server.listen(8383, address='127.0.0.1')
     try:
         tornado.ioloop.IOLoop.instance().start()
     except KeyboardInterrupt:
         pass
 
-    tornado.ioloop.IOLoop.instance().stop() # TODO: Do we need to stop?
+    tornado.ioloop.IOLoop.instance().stop()
     denon.stop()
     denon.close()
+
+if __name__ == '__main__':
+    main()
