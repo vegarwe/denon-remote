@@ -12,6 +12,9 @@ import tornado.websocket
 import paho.mqtt.client as mqtt
 
 
+SCRIPT_PATH = os.path.dirname(os.path.abspath(__file__))
+
+
 class Denon(object):
     MV = re.compile('MV([0-9]{1,2})([0-9]*)')
 
@@ -83,6 +86,8 @@ class Denon(object):
                 if m.group(2) != '':
                     volume += int(m.group(2)) / 10.
                 self.status['MV'] = volume
+        if event.startswith("MVMAX"):
+            return # Ignore event
 
         for client in WSHandler.participants:
             #print "client", client
@@ -257,25 +262,23 @@ class MainHandler(tornado.web.RequestHandler):
         elif path == '' or path == 'index.html':
             self.set_status(200)
             self.set_header("Content-type", "text/html")
-            self.write(open('index.html').read())
+            self.write(open(os.path.join(SCRIPT_PATH, 'index.html')).read())
         elif path in ['sw.js']:
             self.set_status(200)
             self.set_header("Content-type", "text/javascript")
-            self.write(open(path).read())
+            self.write(open(os.path.join(SCRIPT_PATH, path)).read())
         else:
             self.send_error(404)
 
 
-script_path = os.path.dirname(os.path.realpath(__file__))
-
-application = tornado.web.Application([
-    (r'/ws', WSHandler),
-    (r"/static/(.*)", tornado.web.StaticFileHandler, dict(path=script_path)),
-    (r'/(.*)', MainHandler),
-])
-
 def main():
-    config = json.load(open('server.json'))
+    application = tornado.web.Application([
+        (r'/ws', WSHandler),
+        (r"/static/(.*)", tornado.web.StaticFileHandler, dict(path=SCRIPT_PATH)),
+        (r'/(.*)', MainHandler),
+    ])
+
+    config = json.load(open(os.path.join(SCRIPT_PATH, 'server.json')))
     if 'serial' in config:
         denon = Denon(config['serial'])
         mqtt_client = MQTTClient(denon, config['mqtt_host'], config['mqtt_user'], config['mqtt_pass'])
@@ -303,6 +306,7 @@ def main():
     denon.close()
     if 'serial' in config:
         mqtt_client.stop()
+
 
 if __name__ == '__main__':
     main()
