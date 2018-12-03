@@ -137,6 +137,13 @@ class MQTTDenon(object):
     def _on_message(self, client, userdata, msg):
         print("Topic %s, payload %s" % (msg.topic, msg.payload))
 
+        try:
+            self.status = json.loads(msg.payload.decode('utf-8'))
+
+            for ws_client in WSHandler.participants:
+                d = ws_client.write_message(self.status)
+        except Exception as e:
+            print('Exception %r %s' % (e, e))
 
 class MQTTClient(object):
     def __init__(self, denon, hostname, username, password):
@@ -205,6 +212,9 @@ class MQTTClient(object):
 
 class WSHandler(tornado.websocket.WebSocketHandler):
     participants = set()
+
+    def check_origin(self, origin):
+        return True
 
     def open(self):
         #print 'connection opened'
