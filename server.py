@@ -1,15 +1,22 @@
-import json
 import os
 import re
-import serial
 import sys
 import time
+import json
+import serial
+import base64
 import threading
 import tornado.ioloop
 import tornado.httpserver
 import tornado.web
 import tornado.websocket
 import paho.mqtt.client as mqtt
+
+# TODO python3, asyncio
+# done webworker
+# TODO Reconnect websocket (on click, maybe also on timeout)
+# TODO Update PRECACHE in python based on git hash or MD5?
+# TODO Status on reload
 
 
 SCRIPT_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -236,9 +243,27 @@ class WSHandler(tornado.websocket.WebSocketHandler):
 
 class MainHandler(tornado.web.RequestHandler):
     denon = None
+    config = None
+
+    def __check_auth(self):
+        if 'auth_data' not in self.config:
+            return True
+
+        auth_header = self.request.headers.get("Authorization", "")
+        auth_decoded = base64.b64decode(auth_header[6:]).decode('ascii')
+        if not auth_decoded == self.config['auth_data']:
+            self.set_status(401)
+            self.set_header('WWW-Authenticate', 'Basic realm=\"research\"')
+            self.set_header("Content-type", "text/plain")
+            self.write('401: No can do')
+            tornado.web.Finish()
+            return False
+
+        return True
 
     def put(self, path):
-        print('path %s' % path)
+        if not self.__check_auth():
+            return
         if not self.denon:
             self.send_error(412)
             return
@@ -256,6 +281,8 @@ class MainHandler(tornado.web.RequestHandler):
             self.send_error(405)
 
     def get(self, path):
+        if not self.__check_auth():
+            return
         if path == 'api/status':
             self.set_status(200)
             self.write(self.denon.status)
@@ -289,6 +316,7 @@ def main():
     denon.start()
     denon.request_status()
     MainHandler.denon = denon
+    MainHandler.config = config
 
     http_server = tornado.httpserver.HTTPServer(application)
     if 'http_addr' in config:
