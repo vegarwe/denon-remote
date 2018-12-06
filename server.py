@@ -263,6 +263,10 @@ class MainHandler(tornado.web.RequestHandler):
         if 'auth_data' not in self.config:
             return True
 
+        auth_cookie = self.get_cookie("auth_data")
+        if auth_cookie == self.config['auth_data']:
+            return True
+
         auth_header = self.request.headers.get("Authorization", "")
         auth_decoded = base64.b64decode(auth_header[6:]).decode('ascii')
         if not auth_decoded == self.config['auth_data']:
@@ -295,13 +299,11 @@ class MainHandler(tornado.web.RequestHandler):
             self.send_error(405)
 
     def get(self, path):
-        if not self.__check_auth():
-            return
         if path == 'api/status':
             self.set_status(200)
-            self.set_header("Content-type", "text/json")
+            self.set_header("Content-type", "application/json")
             self.write(json.dumps(self.denon.status))
-        elif path == '' or path == 'index.html':
+        elif path in ['', 'index.html']:
             self.set_status(200)
             self.set_header("Content-type", "text/html")
             self.write(open(os.path.join(SCRIPT_PATH, 'index.html')).read())
@@ -309,6 +311,12 @@ class MainHandler(tornado.web.RequestHandler):
             self.set_status(200)
             self.set_header("Content-type", "text/javascript")
             self.write(open(os.path.join(SCRIPT_PATH, path)).read())
+        elif path in ['login']:
+            if not self.__check_auth():
+                return
+            if not self.get_cookie("auth_data") and 'auth_data' in self.config:
+                self.set_cookie("auth_data", self.config['auth_data'])
+            self.redirect('index.html')
         else:
             self.send_error(404)
 
