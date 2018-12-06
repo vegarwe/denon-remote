@@ -222,7 +222,8 @@ class MQTTClient(object):
             self.denon.cmd(cmd)
 
     def _handle_api(self, cmd):
-        if api == 'request_status':
+        #print('_handle_api', cmd)
+        if cmd == 'request_status':
             self.denon.request_status()
 
     def _on_message(self, client, userdata, msg):
