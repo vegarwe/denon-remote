@@ -69,10 +69,12 @@
     denonRemoteApp.controller('DenonCtrl', function ($scope, $http, $interval, $location) {
 
         $scope.get_status = function () {
+            console.log("get_status");
             $http.get("api/status")
-            .then(function(data, status, headers, config) {
-                $scope.denon_status = data;
-            }).catch(function(data, status, headers, config) {
+            .then(function(resp) {
+                $scope.denon_status = resp.data;
+            }, function(response) {
+                console.log(response);
                 $scope.errorMsg = "Failed to get status";
                 console.log($scope.errorMsg);
             });
@@ -80,9 +82,11 @@
 
         $scope.put_cmd = function (cmd) {
             $http.put("api/cmd", {'cmd': cmd})
-            .then(function(data, status, headers, config) {
-                //$scope.denon_status = data;
-            }).catch(function(data, status, headers, config) {
+            .then(function(resp) {
+                // No need to update, will get MQTT event
+                //$scope.denon_status = resp.data;
+            }, function(response) {
+                console.log(response);
                 $scope.errorMsg = "Failed to mute";
                 console.log($scope.errorMsg);
             });
@@ -91,10 +95,11 @@
         $scope.request_status = function () {
             console.log("request_status");
             $http.put("api/request_status")
-            .then(function(data, status, headers, config) {
-                //
-            }).catch(function(data, status, headers, config) {
-                $scope.errorMsg = "Failed to mute";
+            .then(function(resp) {
+                // No need to update, will get MQTT event
+            }, function(response) {
+                console.log(response);
+                $scope.errorMsg = "Failed to request status";
                 console.log($scope.errorMsg);
             });
         }
@@ -139,7 +144,6 @@
 
 <script type="text/javascript">
     /*
-    */
     if ('serviceWorker' in navigator) {
         console.log('registering service worker');
         navigator.serviceWorker.register('sw.js').then(function(reg) {
@@ -164,6 +168,7 @@
             window.location.reload();
         });
     }
+    */
 </script>',
 
 </html>

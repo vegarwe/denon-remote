@@ -13,11 +13,12 @@ import tornado.websocket
 import paho.mqtt.client as mqtt
 
 # TODO python3, asyncio
-# done webworker
 # TODO Reconnect websocket (on click, maybe also on timeout)
-# TODO Update PRECACHE in python based on git hash or MD5?
-# TODO Status on reload
+# TODO Show websocket status on page
+# TODO Get ServiceWorker to work with basic auth (and Update PRECACHE in python based on git hash or MD5?)
+# done Status on reload
 # done Fix password (leaked to GitHub)
+# done webworker
 
 
 SCRIPT_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -298,7 +299,8 @@ class MainHandler(tornado.web.RequestHandler):
             return
         if path == 'api/status':
             self.set_status(200)
-            self.write(self.denon.status)
+            self.set_header("Content-type", "text/json")
+            self.write(json.dumps(self.denon.status))
         elif path == '' or path == 'index.html':
             self.set_status(200)
             self.set_header("Content-type", "text/html")
@@ -326,10 +328,11 @@ def main():
     else:
         denon = MQTTDenon(config['mqtt_host'], config['mqtt_user'], config['mqtt_pass'])
 
-    denon.start()
-    denon.request_status()
     MainHandler.denon = denon
     MainHandler.config = config
+
+    denon.start()
+    denon.request_status()
 
     http_server = tornado.httpserver.HTTPServer(application)
     if 'http_addr' in config:
