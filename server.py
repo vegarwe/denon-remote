@@ -17,6 +17,7 @@ import paho.mqtt.client as mqtt
 # TODO Reconnect websocket (on click, maybe also on timeout)
 # TODO Update PRECACHE in python based on git hash or MD5?
 # TODO Status on reload
+# done Fix password (leaked to GitHub)
 
 
 SCRIPT_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -121,7 +122,7 @@ class MQTTDenon(object):
 
     def request_status(self):
         print("request_status")
-        self.client.publish("/raiomremote/request_status", "")
+        self.client.publish("/raiomremote/api", "request_status")
         return self.status
 
     def start(self):
@@ -190,10 +191,9 @@ class MQTTClient(object):
         # Subscribing in on_connect() means that if we lose the connection and
         # reconnect then subscriptions will be renewed.
         client.subscribe("/raiomremote/cmd/#")
+        client.subscribe("/raiomremote/api/#")
 
-
-    def _on_message(self, client, userdata, msg):
-        #print("Topic %s, payload %s" % (msg.topic, msg.payload))
+    def _handle_cmd(self, cmd):
         cmds = ("MU?",
                 "SI?",
                 "PW?",
@@ -213,13 +213,25 @@ class MQTTClient(object):
                 "SISAT/CBL")
 
         approved_command = False
-        for cmd in cmds:
-            if msg.payload.startswith(cmd):
+        for i in cmds:
+            if cmd.startswith(i):
                 approved_command = True
                 break
 
         if approved_command:
-            self.denon.cmd(msg.payload)
+            self.denon.cmd(cmd)
+
+    def _handle_api(self, cmd):
+        if api == 'request_status':
+            self.denon.request_status()
+
+    def _on_message(self, client, userdata, msg):
+        #print("Topic %s, payload %s" % (msg.topic, msg.payload))
+
+        if   msg.topic == '/raiomremote/api':
+            return self._handle_api(msg.payload)
+        elif msg.topic == '/raiomremote/cmd':
+            return self._handle_cmd(msg.payload)
 
 
 class WSHandler(tornado.websocket.WebSocketHandler):
