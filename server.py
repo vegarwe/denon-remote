@@ -6,16 +6,19 @@ import json
 import serial
 import base64
 import threading
+import asyncio
+import aiomqtt
 import tornado.ioloop
 import tornado.httpserver
 import tornado.web
 import tornado.websocket
-import paho.mqtt.client as mqtt
+import tornado.platform.asyncio
 
-# TODO python3, asyncio
 # TODO Reconnect websocket (on click, maybe also on timeout)
 # TODO Show websocket status on page
-# TODO Get ServiceWorker to work with basic auth (and Update PRECACHE in python based on git hash or MD5?)
+# TODO Update PRECACHE in python based on git hash or MD5?
+# done python3, asyncio
+# done Get ServiceWorker to work with basic auth (and Update PRECACHE in python based on git hash or MD5?)
 # done Status on reload
 # done Fix password (leaked to GitHub)
 # done webworker
@@ -113,24 +116,28 @@ class MQTTDenon(object):
         self.mqtt_user  = username
         self.mqtt_pass  = password
         self.status     = {}
-        self.client     = mqtt.Client()
+
+        loop = asyncio.get_event_loop()
+        self.client     = aiomqtt.Client(loop)
         self.client.on_connect = self._on_connect
         self.client.on_message = self._on_message
+        self.connected  = asyncio.Event(loop=loop)
 
     def cmd(self, cmd):
         print("cmd   %r" % cmd)
         self.client.publish("/raiomremote/cmd", cmd)
 
-    def request_status(self):
+    async def request_status(self):
         print("request_status")
         self.client.publish("/raiomremote/api", "request_status")
         return self.status
 
-    def start(self):
+    async def start(self):
         print("start")
         self.client.username_pw_set(self.mqtt_user, self.mqtt_pass)
-        self.client.connect(self.mqtt_host, self.mqtt_port, 60)
         self.client.loop_start()
+        await self.client.connect(self.mqtt_host, self.mqtt_port, 60)
+        await self.connected.wait()
 
     def stop(self):
         print("stop")
@@ -147,6 +154,7 @@ class MQTTDenon(object):
         # reconnect then subscriptions will be renewed.
         client.subscribe("/raiomremote/events/#")
 
+        self.connected.set()
 
     def _on_message(self, client, userdata, msg):
         print("Topic %s, payload %s" % (msg.topic, msg.payload))
@@ -328,6 +336,9 @@ def main():
         (r'/(.*)', MainHandler),
     ])
 
+    tornado.platform.asyncio.AsyncIOMainLoop().install()
+    loop = asyncio.get_event_loop()
+
     config = json.load(open(os.path.join(SCRIPT_PATH, 'server.json')))
     if 'serial' in config:
         denon = Denon(config['serial'])
@@ -339,8 +350,8 @@ def main():
     MainHandler.denon = denon
     MainHandler.config = config
 
-    denon.start()
-    denon.request_status()
+    loop.run_until_complete(denon.start())
+    loop.run_until_complete(denon.request_status())
 
     http_server = tornado.httpserver.HTTPServer(application)
     if 'http_addr' in config:
@@ -349,15 +360,16 @@ def main():
         http_server.listen(config['http_port'])
 
     try:
-        tornado.ioloop.IOLoop.instance().start()
+        loop.run_forever()
     except KeyboardInterrupt:
         pass
 
-    tornado.ioloop.IOLoop.instance().stop()
+    print("Stopping")
     denon.stop()
     denon.close()
     if 'serial' in config:
         mqtt_client.stop()
+    loop.stop()
 
 
 if __name__ == '__main__':
