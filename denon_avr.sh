@@ -17,10 +17,10 @@ set -e
 
 case "$1" in
   start)
-    python /home/vegarwe/devel/denon_avr/server.py &
+    python3 /home/vegarwe/devel/denon_avr/server.py &
     ;;
   status)
-    pid=`pgrep -f 'python /home/vegarwe/devel/denon_avr/server.py'` || true
+    pid=`pgrep -f 'python3 /home/vegarwe/devel/denon_avr/server.py'` || true
     if [ -z "$pid" ]; then
         echo "Not running"
     elif kill -0 "$pid"; then
@@ -30,8 +30,8 @@ case "$1" in
     fi
     ;;
   stop)
-    echo "killing `pgrep -f 'python /home/vegarwe/devel/denon_avr/server.py'`"
-    pkill -f 'python /home/vegarwe/devel/denon_avr/server.py'
+    echo "killing `pgrep -f 'python3 /home/vegarwe/devel/denon_avr/server.py'`"
+    pkill -f 'python3 /home/vegarwe/devel/denon_avr/server.py'
     ;;
   *)
     log_action_msg "Usage: /etc/init.d/ssh_tunnel {start|stop|status}" || true
