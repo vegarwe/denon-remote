@@ -1,4 +1,3 @@
-serial
+pyserial_asyncio
 tornado
-#paho-mqtt
 aiomqtt

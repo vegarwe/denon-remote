@@ -1,11 +1,7 @@
 import os
 import re
-import sys
-import time
 import json
-#import serial
 import base64
-import threading
 import asyncio
 import aiomqtt
 import serial_asyncio
