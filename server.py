@@ -15,8 +15,8 @@ import tornado.web
 import tornado.websocket
 import tornado.platform.asyncio
 
-# TODO Fix cookie
 # TODO Update PRECACHE in python based on git hash or MD5?
+# done Fix cookie
 # done Reconnect websocket (on click, maybe also on timeout)
 # done Show websocket status on page
 # done python3, asyncio
@@ -141,7 +141,7 @@ class MQTTDenon(object):
 
     async def stop(self):
         print("stop")
-        self.client.loop_stop()
+        await self.client.loop_stop()
         self.client.disconnect()
 
     def close(self):
@@ -329,8 +329,8 @@ class MainHandler(tornado.web.RequestHandler):
         elif path in ['login']:
             if not self.__check_auth():
                 return
-            if not self.get_cookie("auth_data") and 'auth_data' in self.config:
-                self.set_cookie("auth_data", self.config['auth_data'])
+            if 'auth_data' in self.config:
+                self.set_cookie("auth_data", self.config['auth_data'], expires_days=300)
             self.redirect('index.html')
         else:
             self.send_error(404)
