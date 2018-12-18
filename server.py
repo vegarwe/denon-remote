@@ -15,9 +15,10 @@ import tornado.web
 import tornado.websocket
 import tornado.platform.asyncio
 
-# TODO Reconnect websocket (on click, maybe also on timeout)
-# TODO Show websocket status on page
+# TODO Fix cookie
 # TODO Update PRECACHE in python based on git hash or MD5?
+# done Reconnect websocket (on click, maybe also on timeout)
+# done Show websocket status on page
 # done python3, asyncio
 # done Get ServiceWorker to work with basic auth (and Update PRECACHE in python based on git hash or MD5?)
 # done Status on reload

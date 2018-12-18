@@ -49,6 +49,7 @@
             <tr><th>SI:</th><td>{{ denon_status.SI }}</td></tr>
             <tr><th>MV:</th><td>{{ denon_status.MV }}</td></tr>
             <tr><th>PW:</th><td>{{ denon_status.PW }}</td></tr>
+            <tr><th>WS:</th><td>{{ ws_status }}</td></tr>
         </table>
     </div>
 
@@ -67,6 +68,8 @@
     });
 
     denonRemoteApp.controller('DenonCtrl', function ($scope, $http, $interval, $location) {
+        $scope.ws_status = 'unknown';
+        $scope.denon_status = {};
 
         $scope.get_status = function () {
             console.log("get_status");
@@ -83,8 +86,13 @@
         $scope.put_cmd = function (cmd) {
             $http.put("api/cmd", {'cmd': cmd})
             .then(function(resp) {
-                // No need to update, will get MQTT event
+                // No need to update status, will get MQTT event
                 //$scope.denon_status = resp.data;
+
+                if ($scope.ws_status !== 'connected') {
+                    console.log('reconnecting ws');
+                    connect();
+                }
             }, function(response) {
                 console.log(response);
                 $scope.errorMsg = "Failed to mute";
@@ -104,7 +112,7 @@
             });
         }
 
-        connect = function() {
+        var connect = function() {
             $scope.ws = new WebSocket(get_ws_addr());
 
             $scope.ws.onmessage = function(evt) {
@@ -114,10 +122,14 @@
 
             $scope.ws.onclose = function(evt) {
                 console.log("onclose");
+                $scope.ws_status = 'disconnected';
+                $scope.$apply();
             };
 
             $scope.ws.onopen = function(evt) {
                 console.log("onopen");
+                $scope.ws_status = 'connected';
+                $scope.$apply();
             };
         }
         $scope.get_status();
@@ -169,6 +181,6 @@
             window.location.reload();
         });
     }
-</script>',
+</script>
 
 </html>
