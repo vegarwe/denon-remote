@@ -1,10 +1,7 @@
 import os
-import re
 import json
-import base64
 import asyncio
 import aiomqtt
-import serial_asyncio
 import tornado.ioloop
 import tornado.httpserver
 import tornado.web
@@ -25,84 +22,7 @@ import tornado.platform.asyncio
 SCRIPT_PATH = os.path.dirname(os.path.abspath(__file__))
 
 
-class Denon(asyncio.Protocol):
-    connected = None
-    instance = None
-    MV = re.compile('MV([0-9]{1,2})([0-9]*)')
-
-    def __init__(self):
-        self.status = {}
-        self.mqtt_client = None
-        self.transport = None
-        self.data = bytes()
-
-    def connection_made(self, transport):
-        Denon.instance = self  # TODO: UUuuuuuuuugly. Please figure out a fix
-        self.transport = transport
-        self.connected.set()
-
-    def connection_lost(self, exc):
-        print('Writer closed')
-        self.instance = None
-
-    def cmd(self, cmd):
-        #print("cmd   %r" % cmd)
-        self.transport.write(bytes(cmd + '\r', 'utf-8'))
-
-    async def request_status(self):
-        print('request_status')
-        self.cmd("MU?")
-        await asyncio.sleep(0.001)
-        self.cmd("SI?")
-        await asyncio.sleep(0.001)
-        self.cmd("PW?")
-        await asyncio.sleep(0.001)
-        self.cmd("MV?")
-        await asyncio.sleep(0.001)
-        return self.status
-
-    async def start(self):
-        pass
-
-    async def stop(self):
-        self.transport.close()
-
-    def data_received(self, data):
-        self.data += data
-
-        if b'\r' in self.data:
-            lines = self.data.split(b'\r')
-            self.data = lines[-1]  # Keep partial command
-            for line in lines[:-1]:
-                self._parse_event(line.decode('utf-8'))
-
-    def _parse_event(self, event):
-        #print('event', event)
-        if event.startswith("MU"):
-            self.status['MU'] = event.rstrip('\r')
-        if event.startswith("SI"):
-            self.status['SI'] = event.rstrip('\r')
-        if event.startswith("PW"):
-            self.status['PW'] = event.rstrip('\r')
-        if event.startswith("MV"):
-            match = Denon.MV.search(event)
-            if match:
-                volume = 1 + int(match.group(1))  # Is of by one for some reason
-                if match.group(2) != '':
-                    volume += int(match.group(2)) / 10.
-                self.status['MV'] = volume
-        if event.startswith("MVMAX"):
-            return  # Ignore event
-
-        for client in WSHandler.participants:
-            #print "client", client
-            client.write_message(self.status)
-
-        if self.mqtt_client:
-            self.mqtt_client.send_status(self.status)
-
-
-class MQTTDenon():
+class Denon():
     def __init__(self, hostname, username, password):
         self.mqtt_host  = hostname
         self.mqtt_port  = 1883
@@ -151,90 +71,6 @@ class MQTTDenon():
 
         for ws_client in WSHandler.participants:
             ws_client.write_message(self.status)
-
-
-class MQTTClient():
-    def __init__(self, denon, hostname, username, password):
-        self.denon      = denon
-        self.mqtt_host  = hostname
-        self.mqtt_port  = 1883
-        self.mqtt_user  = username
-        self.mqtt_pass  = password
-        self.status     = {}
-
-        loop = asyncio.get_event_loop()
-        self.connected  = asyncio.Event(loop=loop)
-        self.client     = aiomqtt.Client(loop)
-        self.client.on_connect = self._on_connect
-        self.client.on_message = self._on_message
-
-        # TODO: Fix event handler callback instead...
-        denon.mqtt_client = self
-
-    async def start(self):
-        self.client.username_pw_set(self.mqtt_user, self.mqtt_pass)
-        self.client.loop_start()
-        await self.client.connect(self.mqtt_host, self.mqtt_port, 60)
-        await self.connected.wait()
-
-    async def stop(self):
-        print("stop")
-        await self.client.loop_stop()
-        self.client.disconnect()
-
-    def send_status(self, status):
-        self.client.publish("/raiomremote/events/status", json.dumps(status))
-
-    def _on_connect(self, client, userdata, flags, rc):
-        print("Connected with result code %s" % rc)
-
-        # Subscribing in on_connect() means that if we lose the connection and
-        # reconnect then subscriptions will be renewed.
-        client.subscribe("/raiomremote/cmd/#")
-        client.subscribe("/raiomremote/api/#")
-
-        self.connected.set()
-
-    def _handle_cmd(self, cmd):
-        cmds = (b"MU?",
-                b"SI?",
-                b"PW?",
-                b"MV?",
-
-                b"PWON",
-                b"PWSTANDBY",
-                b"MVUP",
-                b"MVDOWN",
-                b"MUON",
-                b"MUOFF",
-                b"SIDVD",
-                b"SITV",
-                b"SIVCR",
-                b"SIHDP",
-                b"SITUNER",
-                b"SISAT/CBL")
-
-        approved_command = False
-        for i in cmds:
-            if cmd.startswith(i):
-                approved_command = True
-                break
-
-        if approved_command:
-            self.denon.cmd(cmd.decode('utf-8'))
-
-    def _handle_api(self, cmd):
-        #print('_handle_api', cmd)
-        if cmd == 'request_status':
-            self.denon.request_status()
-
-    def _on_message(self, client, userdata, msg):
-        #print("Topic %s, payload %s" % (msg.topic, msg.payload))
-
-        if   msg.topic == '/raiomremote/api':
-            self._handle_api(msg.payload)
-        elif msg.topic == '/raiomremote/cmd':
-            self._handle_cmd(msg.payload)
 
 
 class WSHandler(tornado.websocket.WebSocketHandler):
@@ -334,20 +170,7 @@ def main():
     loop = asyncio.get_event_loop()
 
     config = json.load(open(os.path.join(SCRIPT_PATH, 'server.json')))
-    if 'serial' in config:
-        # TODO: Ugly fugly, please fix
-        Denon.connected  = asyncio.Event(loop=loop)
-        asyncio.ensure_future(
-                serial_asyncio.create_serial_connection(
-                    loop, Denon, config['serial'], baudrate=9600))
-        loop.run_until_complete(Denon.connected.wait())
-        denon = Denon.instance
-
-        mqtt_client = MQTTClient(
-                denon, config['mqtt_host'], config['mqtt_user'], config['mqtt_pass'])
-        loop.run_until_complete(mqtt_client.start())
-    else:
-        denon = MQTTDenon(config['mqtt_host'], config['mqtt_user'], config['mqtt_pass'])
+    denon = Denon(config['mqtt_host'], config['mqtt_user'], config['mqtt_pass'])
 
     MainHandler.denon = denon
     MainHandler.config = config
@@ -368,8 +191,6 @@ def main():
 
     print("Stopping")
     loop.run_until_complete(denon.stop())
-    if 'serial' in config:
-        loop.run_until_complete(mqtt_client.stop())
     loop.stop()
 
 
