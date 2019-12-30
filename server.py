@@ -264,28 +264,14 @@ class MainHandler(tornado.web.RequestHandler):
         if 'auth_data' not in self.config:
             return True
 
-        auth_cookie = self.get_cookie("auth_data")
-        if auth_cookie == self.config['auth_data']:
-            return True
-
-        auth_header = self.request.headers.get("Authorization", "")
-        auth_decoded = base64.b64decode(auth_header[6:]).decode('ascii')
-        if not auth_decoded == self.config['auth_data']:
-            self.set_status(401)
-            self.set_header('WWW-Authenticate', 'Basic realm=\"research\"')
-            self.set_header("Content-type", "text/plain")
-            self.write('401: No can do')
-            tornado.web.Finish()
-            return False
-
-        return True
+        auth_cookie = self.get_secure_cookie("auth_data").decode()
+        return auth_cookie == self.config['auth_data']
 
     def put(self, path):
         if not self.__check_auth():
-            return
+            return self.send_error(401)
         if not self.denon:
-            self.send_error(412)
-            return
+            return self.send_error(412)
 
         if path == 'api/cmd':
             cmd = json.loads(self.request.body.decode('utf-8'))
@@ -312,22 +298,37 @@ class MainHandler(tornado.web.RequestHandler):
             self.set_status(200)
             self.set_header("Content-type", "text/javascript")
             self.write(open(os.path.join(SCRIPT_PATH, path)).read())
-        elif path in ['login']:
+        elif path in ['login', 'login.html']:
             if not self.__check_auth():
+                self.set_status(200)
+                self.set_header("Content-type", "text/html")
+                self.write(open(os.path.join(SCRIPT_PATH, 'login.html')).read())
                 return
             if 'auth_data' in self.config:
-                self.set_cookie("auth_data", self.config['auth_data'], expires_days=300)
+                self.set_secure_cookie("auth_data", self.config['auth_data'], secure=True, expires_days=900)
             self.redirect('index.html')
         else:
             self.send_error(404)
 
+    def post(self, path):
+        if path in ['login', 'login.html']:
+            auth_data = self.get_body_argument("password", default=None, strip=False)
+            if auth_data == self.config['auth_data']:
+                self.set_secure_cookie("auth_data", self.config['auth_data'], secure=True, expires_days=900)
+                self.redirect('index.html')
+            else:
+                self.set_status(200)
+                self.set_header("Content-type", "text/html")
+                self.write(open(os.path.join(SCRIPT_PATH, 'login.html')).read())
+        else:
+            self.send_error(404)
 
 def main():
     application = tornado.web.Application([
         (r'/ws', WSHandler),
         (r"/static/(.*)", tornado.web.StaticFileHandler, dict(path=SCRIPT_PATH)),
         (r'/(.*)', MainHandler),
-    ])
+    ], cookie_secret="d0870884-495c-4758-8c86-24383dc0ee69")
 
     tornado.platform.asyncio.AsyncIOMainLoop().install()
     loop = asyncio.get_event_loop()

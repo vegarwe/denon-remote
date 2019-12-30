@@ -50,6 +50,7 @@
             <tr><th>MV:</th><td>{{ denon_status.MV }}</td></tr>
             <tr><th>PW:</th><td>{{ denon_status.PW }}</td></tr>
             <tr><th>WS:</th><td>{{ ws_status }}</td></tr>
+            <tr><th>&nbsp;</th><td>{{ errorMsg }}</td></tr>
         </table>
     </div>
 
@@ -76,6 +77,7 @@
             $http.get("api/status")
             .then(function(resp) {
                 $scope.denon_status = resp.data;
+                $scope.errorMsg = "";
             }, function(response) {
                 console.log(response);
                 $scope.errorMsg = "Failed to get status";
@@ -89,13 +91,19 @@
                 // No need to update status, will get MQTT event
                 //$scope.denon_status = resp.data;
 
+                $scope.errorMsg = "";
+                console.log('Success, cmd ' + cmd);
+
                 if ($scope.ws_status !== 'connected') {
                     console.log('reconnecting ws');
                     connect();
                 }
             }, function(response) {
                 console.log(response);
-                $scope.errorMsg = "Failed to mute";
+                if (response.status === 401) {
+                    window.location.replace("login.html");
+                }
+                $scope.errorMsg = "Failure, cmd " + cmd;
                 console.log($scope.errorMsg);
             });
         }
@@ -105,6 +113,9 @@
             $http.put("api/request_status")
             .then(function(resp) {
                 // No need to update, will get MQTT event
+                //$scope.denon_status = resp.data;
+
+                $scope.errorMsg = "";
             }, function(response) {
                 console.log(response);
                 $scope.errorMsg = "Failed to request status";
