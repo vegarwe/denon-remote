@@ -1,0 +1,12 @@
+#ifndef _CONFIG_H
+#define _CONFIG_H
+
+#define WIFI_SSID   "some-wifi-ssid"
+#define WIFI_PASS   "that-ssid-password"
+#define MQTT_HOST   "example.com"
+#define MQTT_USER   "a-working-user"
+#define MQTT_PASS   "soME-Working-PASsword"
+#define MQTT_PORT   1883
+
+#endif//_CONFIG_H
+
