@@ -23,15 +23,12 @@ SCRIPT_PATH = os.path.dirname(os.path.abspath(__file__))
 
 
 class Denon():
-    def __init__(self, hostname, username, password):
-        self.mqtt_host  = hostname
-        self.mqtt_port  = 1883
-        self.mqtt_user  = username
-        self.mqtt_pass  = password
-        self.status     = {}
+    def __init__(self, config):
+        self.config = config
+        self.status = {}
 
         loop = asyncio.get_event_loop()
-        self.client     = aiomqtt.Client(loop)
+        self.client = aiomqtt.Client(loop)
         self.client.on_connect = self._on_connect
         self.client.on_message = self._on_message
         self.connected  = asyncio.Event(loop=loop)
@@ -46,9 +43,15 @@ class Denon():
         return self.status
 
     async def start(self):
-        self.client.username_pw_set(self.mqtt_user, self.mqtt_pass)
+        if 'mqtt_user' in self.config:
+            self.client.username_pw_set(self.config['mqtt_user'], self.config['mqtt_pass'])
+        else:
+            self.client.tls_set(
+                    ca_certs    = self.config['mqtt_ca'],
+                    certfile    = self.config['mqtt_cert'],
+                    keyfile     = self.config['mqtt_key'])
         self.client.loop_start()
-        await self.client.connect(self.mqtt_host, self.mqtt_port, 60)
+        await self.client.connect(self.config['mqtt_host'], self.config['mqtt_port'], 60)
         await self.connected.wait()
 
     async def stop(self):
@@ -173,7 +176,7 @@ def main():
     loop = asyncio.get_event_loop()
 
     config = json.load(open(os.path.join(SCRIPT_PATH, 'server.json')))
-    denon = Denon(config['mqtt_host'], config['mqtt_user'], config['mqtt_pass'])
+    denon = Denon(config)
 
     MainHandler.denon = denon
     MainHandler.config = config
