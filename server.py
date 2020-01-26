@@ -100,8 +100,11 @@ class MainHandler(tornado.web.RequestHandler):
         if 'auth_data' not in self.config:
             return True
 
-        auth_cookie = self.get_secure_cookie("auth_data").decode()
-        return auth_cookie == self.config['auth_data']
+        auth_cookie = self.get_secure_cookie("auth_data")
+        if not auth_cookie:
+            return False
+
+        return auth_cookie.decode() == self.config['auth_data']
 
     def put(self, path):
         if not self.__check_auth():
