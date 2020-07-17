@@ -4,8 +4,8 @@
 #include <MQTTClient.h>
 
 void wifi_mqtt_setup(HardwareSerial* dbg = NULL, MQTTClientCallbackSimple messageCb = NULL);
-void wifi_mqtt_loop();
-void wifi_mqtt_publish(String topic, String payload);
+bool wifi_mqtt_loop();
+bool wifi_mqtt_publish(String topic, String payload);
 
 #endif//_WIFI_MQTT_H
 

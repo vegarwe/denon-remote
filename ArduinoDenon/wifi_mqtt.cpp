@@ -5,7 +5,7 @@
 #include "config.h"
 
 #define WIFI_CONNECTION_TIMEOUT 30000;
-#define AWS_MAX_RECONNECT_TRIES 5
+#define MQTT_MAX_RECONNECT_TRIES 5
 
 
 // WiFi and MQTT client
@@ -67,13 +67,13 @@ void wifi_loop()
 }
 
 
-void connectToAWS()
+void connectMqtt()
 {
-    // Try to connect to AWS and count how many times we retried.
+    // Try to connect to MQTT and count how many times we retried.
     int retries = 0;
-    if (debugger) debugger->println("Connecting to AWS IOT");
+    if (debugger) debugger->println("Connecting to MQTT IOT");
 
-    while (!mqtt.connect(MQTT_NAME) && retries < AWS_MAX_RECONNECT_TRIES)
+    while (!mqtt.connect(MQTT_NAME, MQTT_USER, MQTT_PASS) && retries < MQTT_MAX_RECONNECT_TRIES)
     {
         if (debugger) debugger->print(".");
         delay(200);
@@ -88,8 +88,7 @@ void connectToAWS()
         return;
     }
 
-    // If we land here, we have successfully connected to AWS!
-    // And we can subscribe to topics and send messages.
+    // Subscribe to topics and send messages.
     if (debugger) debugger->println();
     if (debugger) debugger->println("MQTT Connected");
 
@@ -110,19 +109,19 @@ void wifi_mqtt_setup(HardwareSerial* dbg, MQTTClientCallbackSimple messageCb)
     WiFi.mode(WIFI_STA);
     wifi_loop();
 
-    // Configure WiFiClientSecure to use the AWS certificates we generated
-    net.setCACert(aws_root_ca_pem);
-    net.setCertificate(certificate_pem_crt);
-    net.setPrivateKey(private_pem_key);
+    // Configure WiFiClientSecure to use the CA certificate(s)
+    net.setCACert(root_ca_pem);
+    //net.setCertificate(certificate_pem_crt);
+    //net.setPrivateKey(private_pem_key);
 
     // Setup MQTT
     mqtt.begin(MQTT_HOST, MQTT_PORT, net);
     mqtt.onMessage(messageCb);
-    connectToAWS();
+    connectMqtt();
 }
 
 
-void wifi_mqtt_loop()
+bool wifi_mqtt_loop()
 {
     wifi_loop();
     mqtt.loop();
@@ -130,12 +129,14 @@ void wifi_mqtt_loop()
 
     // Reconnect to WiFi and MQTT as needed
     if (!mqtt.connected()) {
-        connectToAWS();
+        connectMqtt();
     }
+
+    return mqtt.connected();
 }
 
 
-void wifi_mqtt_publish(String topic, String payload)
+bool wifi_mqtt_publish(String topic, String payload)
 {
-    mqtt.publish(topic, payload);
+    return mqtt.publish(topic, payload);
 }
