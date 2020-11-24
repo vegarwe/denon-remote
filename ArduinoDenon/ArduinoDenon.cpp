@@ -244,7 +244,6 @@ void setup()
     wifi_mqtt_setup(debugger, mqttPrefix, mqttMessageReceived);
     mqtt_ota_setup(debugger, mqttPrefix);
 
-    //pinMode(RECV_PIN, OUTPUT);
     irrecv.enableIRIn();
 
     pinMode(12, INPUT);
