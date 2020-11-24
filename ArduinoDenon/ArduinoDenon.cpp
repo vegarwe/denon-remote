@@ -139,58 +139,6 @@ void send_request_cmd(char* cmd)
 }
 
 
-void request_status_loop()
-{
-    // TODO: Implement as list of commands to send?
-    //char status_cmds[][] = {
-    //        "MU?",
-    //        "SI?",
-    //        "PW?",
-    //        "MV?"};
-
-    if (recv_status_counter < curr_status_counter)
-    {
-        return;
-    }
-
-    switch (curr_status_counter)
-    {
-        case 0: send_request_cmd("MU?"); break;
-        case 1: send_request_cmd("SI?"); break;
-        case 2: send_request_cmd("PW?"); break;
-        case 3: send_request_cmd("MV?"); break;
-        default: break;
-    }
-}
-
-
-void serial_read_loop()
-{
-    if (! denon_serial->available())
-    {
-        return;
-    }
-
-    digitalWrite(LED_BUILTIN, HIGH);
-    String event;
-    event.reserve(64);
-    while (denon_serial->available())
-    {
-        char newByte = denon_serial->read();
-        event += newByte;
-
-        if (newByte == '\r')
-        {
-            handle_event(event);
-            event = "";
-        }
-    }
-
-    digitalWrite(LED_BUILTIN, LOW);
-}
-
-
-
 void mqttMessageReceived(MQTTClient *client, char topicBuffer[], char payloadBuffer[], int length)
 {
     String topic(topicBuffer);
@@ -306,15 +254,70 @@ void setup()
 }
 
 
+void request_status_loop()
+{
+    // TODO: Implement as list of commands to send?
+    //char status_cmds[][] = {
+    //        "MU?",
+    //        "SI?",
+    //        "PW?",
+    //        "MV?"};
+
+    if (recv_status_counter < curr_status_counter)
+    {
+        return;
+    }
+
+    switch (curr_status_counter)
+    {
+        case 0: send_request_cmd("MU?"); break;
+        case 1: send_request_cmd("SI?"); break;
+        case 2: send_request_cmd("PW?"); break;
+        case 3: send_request_cmd("MV?"); break;
+        default: break;
+    }
+}
+
+
+void serial_read_loop()
+{
+    if (! denon_serial->available())
+    {
+        return;
+    }
+
+    digitalWrite(LED_BUILTIN, HIGH);
+    String event;
+    event.reserve(64);
+    while (denon_serial->available())
+    {
+        char newByte = denon_serial->read();
+        event += newByte;
+
+        if (newByte == '\r')
+        {
+            handle_event(event);
+            event = "";
+        }
+    }
+
+    digitalWrite(LED_BUILTIN, LOW);
+}
+
+
 void irrgang_loop()
 {
     if (tvToggle)
     {
         tvToggle = false;
 
-        delay(1500); // Wait for IR led of remote control to stop interferring!
-        irsend.sendNEC(0x20DF10EF, 32);
-        mqtt.publish(mqttPrefix + "/control/up", "TV power toggled");
+        // Only actually toggle if this is not in response to a status command
+        if (recv_status_counter >= curr_status_counter)
+        {
+            delay(1500); // Wait for IR led of remote control to stop interferring!
+            irsend.sendNEC(0x20DF10EF, 32);
+            mqtt.publish(mqttPrefix + "/control/up", "TV power toggled");
+        }
     }
 
     if (! irrecv.decode(&results)) {
@@ -361,13 +364,13 @@ void irrgang_loop()
     {
         if (status.PW == "PWON")
         {
-            mqtt.publish(mqttPrefix + "/control/up", status.PW + "PWSTANDBY");
+            mqtt.publish(mqttPrefix + "/control/up", status.PW + " PWSTANDBY");
             //mqtt.publish("/raiomremote/cmd", "PWSTANDBY");
             send_cmd("PWSTANDBY");
         }
         else
         {
-            mqtt.publish(mqttPrefix + "/control/up", status.PW + "PWON");
+            mqtt.publish(mqttPrefix + "/control/up", status.PW + " PWON");
             //mqtt.publish("/raiomremote/cmd", "PWON");
             send_cmd("PWON");
         }
