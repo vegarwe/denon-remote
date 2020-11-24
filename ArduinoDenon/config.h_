@@ -3,7 +3,6 @@
 
 #define WIFI_SSID   "some-wifi-ssid"
 #define WIFI_PASS   "that-ssid-password"
-#define MQTT_NAME   "the-thing-name-matching-cert-below"
 #define MQTT_HOST   "your-aws-iot-mqtt-endpoint"
 #define MQTT_PORT   8883
 

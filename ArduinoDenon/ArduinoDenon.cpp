@@ -1,15 +1,32 @@
+#include <Arduino.h>
 #include <ArduinoJson.h>
+#include <IRremote.h>
+#include <RCSwitch.h>
 #include <HardwareSerial.h>
-#include <MQTT.h>
+#include <MQTT.h> // TODO: Remove?
 #include <WiFi.h>
 
 #include "wifi_mqtt.h"
+#include "mqtt_ota.h"
+#include "config.h"
 
 
-// Object used for debug output
-static HardwareSerial* debugger = NULL;
+static HardwareSerial*  debugger    = NULL;
+static String           mqttPrefix;
+
+
+static int              RECV_PIN    = 15;
+static IRrecv           irrecv(RECV_PIN);
+static decode_results   results;
+static uint32_t         tvToggle    = 0;
+
+static byte             SEND_PIN    = 19;
+static IRsend           irsend(SEND_PIN);
+
+static RCSwitch         mySwitch;
+
+
 static HardwareSerial* denon_serial = NULL;
-
 static unsigned int curr_status_counter = 0;
 static unsigned int recv_status_counter = 0;
 
@@ -50,6 +67,7 @@ void handle_event(String& event)
     }
     else if (event.startsWith("PW"))
     {
+        tvToggle = true;
         status.PW = event;
     }
     else if (event.startsWith("MVMAX"))
@@ -95,7 +113,7 @@ void handle_event(String& event)
     {
         String msg;
         serializeJson(json, msg);
-        wifi_mqtt_publish("/raiomremote/events/status", msg.c_str());
+        mqtt.publish("/raiomremote/events/status", msg.c_str());
     }
 
     if (recv_status_counter < curr_status_counter)
@@ -172,17 +190,26 @@ void serial_read_loop()
 }
 
 
-void mqtt_setup()
+
+void mqttMessageReceived(MQTTClient *client, char topicBuffer[], char payloadBuffer[], int length)
 {
-}
+    String topic(topicBuffer);
+    if (Update.isRunning() || topic.startsWith(mqttPrefix + "/ota/"))
+    {
+        if (! topic.startsWith(mqttPrefix + "/ota/")) return;
 
+        if (! Update.isRunning())
+        {
+            irrecv.disableIRIn();
+        }
+        return mqtt_ota_handle_payload(topic, payloadBuffer, length);
+    }
 
-void mqtt_on_message(String &topic, String &payload)
-{
+    String payload(payloadBuffer);
 
-    if (debugger) {
-        debugger->print("mqtt_on_message: ");
-        debugger->print("[");
+    if (debugger)
+    {
+        debugger->print("mqttMessageReceived: [");
         debugger->print(topic);
         debugger->print("] ");
         debugger->println(payload);
@@ -219,16 +246,22 @@ void mqtt_on_message(String &topic, String &payload)
             request_status();
         }
     }
+    else if (topic.startsWith(mqttPrefix+ "/irrgang") && payload == "power")
+    {
+        irsend.sendNEC(0x20DF10EF, 32);
+
+    }
 }
 
 
 void setup()
 {
-    Serial.begin(115200);
     debugger = &Serial;
 
-    if (debugger) {
-        delay(2000);
+    if (debugger)
+    {
+        debugger->begin(2000000);
+        delay(100);
         debugger->println("");
 #if defined(ARDUINO_NodeMCU_32S)
         debugger->println("NodeMCU-32S starting...");
@@ -237,6 +270,7 @@ void setup()
 #else
         debugger->println("Starting...");
 #endif
+        delay(500); // TODO: Remove?
     }
 
     pinMode(LED_BUILTIN, OUTPUT);
@@ -258,7 +292,132 @@ void setup()
 
     request_status();
 
-    wifi_mqtt_setup(debugger, mqtt_on_message);
+    mqttPrefix = String(MQTT_ROOT "/") + WiFi.macAddress();
+    wifi_mqtt_setup(debugger, mqttPrefix, mqttMessageReceived);
+    mqtt_ota_setup(debugger, mqttPrefix);
+
+    //pinMode(RECV_PIN, OUTPUT);
+    irrecv.enableIRIn();
+
+    pinMode(12, INPUT);
+    mySwitch.enableReceive(digitalPinToInterrupt(12));
+
+    mqtt.publish(MQTT_ROOT "/control/up", "starting: " + WiFi.macAddress() + " 0x06");
+}
+
+
+void irrgang_loop()
+{
+    if (tvToggle)
+    {
+        tvToggle = false;
+
+        delay(1500); // Wait for IR led of remote control to stop interferring!
+        irsend.sendNEC(0x20DF10EF, 32);
+        mqtt.publish(mqttPrefix + "/control/up", "TV power toggled");
+    }
+
+    if (! irrecv.decode(&results)) {
+        return;
+    }
+
+    String type = "UNKNOWN";
+    switch (results.decode_type){
+        case NEC:           type = "NEC";           break;
+        case SONY:          type = "SONY";          break;
+        case RC5:           type = "RC5";           break;
+        case RC6:           type = "RC6";           break;
+        case DISH:          type = "DISH";          break;
+        case SHARP:         type = "SHARP";         break;
+        case JVC:           type = "JVC";           break;
+        case SANYO:         type = "SANYO";         break;
+        case MITSUBISHI:    type = "MISUBISHI";     break;
+        case SAMSUNG:       type = "SAMSUNG";       break;
+        case LG:            type = "LG";            break;
+        case WHYNTER:       type = "WHYNTER";       break;
+        case AIWA_RC_T501:  type = "AIWARC_T501";   break;
+        case PANASONIC:     type = "PNASONIC";      break;
+        case DENON:         type = "DENON";         break;
+        default:
+        case UNKNOWN:       type = "UNKNOWN";       break;
+    }
+    //Serial.print(results.value, HEX);
+    //Serial.print(" - ");
+    //Serial.println(type);
+
+    String data = String("led: ") + type + String("-0x") + String(results.value, HEX);
+    //mqtt.publish(mqttPrefix + "/control/up", data);
+    Serial.print(mqttPrefix + "/control/up: ");
+    Serial.println(data);
+
+    if (results.decode_type == NEC && results.value == 0x1224649B) // Radio
+    {
+        // TODO: Please! Do not sleep in the callback! Mother fucker...!
+        delay(150); // Wait for IR led of remote control to stop interferring!
+        irsend.sendNEC(0x20DF10EF, 32);
+        mqtt.publish(mqttPrefix + "/control/up", "TV power toggled");
+    }
+    if (results.decode_type == NEC && results.value == 0x12248877) // ?
+    {
+        if (status.PW == "PWON")
+        {
+            mqtt.publish(mqttPrefix + "/control/up", status.PW + "PWSTANDBY");
+            //mqtt.publish("/raiomremote/cmd", "PWSTANDBY");
+            send_cmd("PWSTANDBY");
+        }
+        else
+        {
+            mqtt.publish(mqttPrefix + "/control/up", status.PW + "PWON");
+            //mqtt.publish("/raiomremote/cmd", "PWON");
+            send_cmd("PWON");
+        }
+    }
+
+    irrecv.resume(); // Receive the next value
+}
+
+
+void lpd433_loop()
+{
+    static uint64_t      lastValue = 0;
+    static unsigned long lastStamp = 0;
+
+    if (mySwitch.available()) {
+        uint64_t recvValue = mySwitch.getReceivedValue();
+        unsigned long now = millis();
+
+        if (lastValue == recvValue && abs(now - lastStamp) < 1400)
+        {
+            //Serial.printf("Skipping lastStamp %lu now %lu, %lu\n", lastStamp, now, now - lastStamp);
+        }
+        else
+        {
+            if (debugger) {
+                debugger->printf("value: %08llx ", recvValue);
+                debugger->printf("bitlen: %d ",    mySwitch.getReceivedBitlength());
+                debugger->printf("delay:  %d ",    mySwitch.getReceivedDelay());
+                debugger->printf("proto:  %d\n",    mySwitch.getReceivedProtocol());
+            }
+
+            //if (debugger) {
+            //    unsigned int * timings = mySwitch.getReceivedRawdata();
+
+            //    for (int i = 0; i < mySwitch.getReceivedBitlength() * 2; i++) {
+            //        Serial.printf("%d,", timings[i]);
+            //    }
+            //    Serial.println();
+            //}
+
+            char hexValue[] = "0x123456789abcdef0";
+            snprintf(hexValue, sizeof(hexValue), "0x%08llx", recvValue);
+            mqtt.publish(mqttPrefix + "/lpd433/up", hexValue);
+        }
+
+        lastValue = recvValue;
+        lastStamp = now;
+
+        mySwitch.resetAvailable();
+    }
 }
 
 
@@ -267,6 +426,15 @@ void loop()
     serial_read_loop();
     request_status_loop();
 
+    //digitalWrite(LED_BUILTIN, HIGH);
+
     wifi_mqtt_loop();
+    mqtt_ota_loop(); // Will block once update starts
+
+    irrgang_loop();
+    lpd433_loop();
+
+    yield();
+    //digitalWrite(LED_BUILTIN, LOW);
 }
 

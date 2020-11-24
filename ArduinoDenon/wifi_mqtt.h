@@ -1,11 +1,12 @@
 #ifndef _WIFI_MQTT_H
 #define _WIFI_MQTT_H
 
+#include <HardwareSerial.h>
 #include <MQTTClient.h>
 
-void wifi_mqtt_setup(HardwareSerial* dbg = NULL, MQTTClientCallbackSimple messageCb = NULL);
+extern MQTTClient mqtt;
+void wifi_mqtt_setup(HardwareSerial* dbg, String topicPrefix, MQTTClientCallbackAdvanced messageCb);
 bool wifi_mqtt_loop();
-bool wifi_mqtt_publish(String topic, String payload);
 
 #endif//_WIFI_MQTT_H
 
