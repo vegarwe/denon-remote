@@ -45,11 +45,14 @@ class Denon():
     async def start(self):
         if 'mqtt_user' in self.config:
             self.client.username_pw_set(self.config['mqtt_user'], self.config['mqtt_pass'])
-        else:
+        if 'mqtt_cert' in self.config:
             self.client.tls_set(
                     ca_certs    = self.config['mqtt_ca'],
                     certfile    = self.config['mqtt_cert'],
                     keyfile     = self.config['mqtt_key'])
+        elif 'mqtt_ca' in self.config:
+            self.client.tls_set(
+                    ca_certs    = self.config['mqtt_ca'])
         self.client.loop_start()
         await self.client.connect(self.config['mqtt_host'], self.config['mqtt_port'], 60)
         await self.connected.wait()
