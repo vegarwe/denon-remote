@@ -17,7 +17,6 @@ static String           mqttPrefix;
 
 static int              RECV_PIN    = 15;
 static IRrecv           irrecv(RECV_PIN);
-static decode_results   results;
 static uint32_t         tvToggle    = 0;
 
 static byte             SEND_PIN    = 19;
@@ -306,6 +305,8 @@ void serial_read_loop()
 
 void irrgang_loop()
 {
+    decode_results results;
+
     if (tvToggle)
     {
         tvToggle = false;
@@ -343,19 +344,15 @@ void irrgang_loop()
         default:
         case UNKNOWN:       type = "UNKNOWN";       break;
     }
-    //Serial.print(results.value, HEX);
-    //Serial.print(" - ");
-    //Serial.println(type);
 
     String data = String("led: ") + type + String("-0x") + String(results.value, HEX);
-    //mqtt.publish(mqttPrefix + "/control/up", data);
+    mqtt.publish(mqttPrefix + "/control/up", data);
     Serial.print(mqttPrefix + "/control/up: ");
     Serial.println(data);
 
     if (results.decode_type == NEC && results.value == 0x1224649B) // Radio
     {
-        // TODO: Please! Do not sleep in the callback! Mother fucker...!
-        delay(150); // Wait for IR led of remote control to stop interferring!
+        delay(350); // Wait for IR led of remote control to stop interferring!
         irsend.sendNEC(0x20DF10EF, 32);
         mqtt.publish(mqttPrefix + "/control/up", "TV power toggled");
     }
@@ -372,6 +369,17 @@ void irrgang_loop()
             mqtt.publish(mqttPrefix + "/control/up", status.PW + " PWON");
             //mqtt.publish("/raiomremote/cmd", "PWON");
             send_cmd("PWON");
+        }
+    }
+    if (results.decode_type == NEC && results.value == 0x122404fb) // HD-kanaler
+    {
+        if (status.SI == "SITV")
+        {
+            send_cmd("SIDVD");
+        }
+        else
+        {
+            send_cmd("SITV");
         }
     }
 
