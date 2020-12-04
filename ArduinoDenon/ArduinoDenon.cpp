@@ -66,7 +66,11 @@ void handle_event(String& event)
     }
     else if (event.startsWith("PW"))
     {
-        tvToggle = true;
+        // Only actually toggle if this is not in response to a status command
+        if (recv_status_counter >= curr_status_counter)
+        {
+            tvToggle = millis();
+        }
         status.PW = event;
     }
     else if (event.startsWith("MVMAX"))
@@ -307,17 +311,11 @@ void irrgang_loop()
 {
     decode_results results;
 
-    if (tvToggle)
+    if (tvToggle > 0 && (millis() - tvToggle) > 1500)
     {
-        tvToggle = false;
-
-        // Only actually toggle if this is not in response to a status command
-        if (recv_status_counter >= curr_status_counter)
-        {
-            delay(1500); // Wait for IR led of remote control to stop interferring!
-            irsend.sendNEC(0x20DF10EF, 32);
-            mqtt.publish(mqttPrefix + "/control/up", "TV power toggled");
-        }
+        tvToggle = 0;
+        irsend.sendNEC(0x20DF10EF, 32);
+        mqtt.publish(mqttPrefix + "/control/up", "TV power toggled");
     }
 
     if (! irrecv.decode(&results)) {
@@ -350,36 +348,36 @@ void irrgang_loop()
     Serial.print(mqttPrefix + "/control/up: ");
     Serial.println(data);
 
-    if (results.decode_type == NEC && results.value == 0x1224649B) // Radio
+
+    static uint32_t prev_time = 0;
+    if (millis() - prev_time > 300)
     {
-        delay(350); // Wait for IR led of remote control to stop interferring!
-        irsend.sendNEC(0x20DF10EF, 32);
-        mqtt.publish(mqttPrefix + "/control/up", "TV power toggled");
-    }
-    if (results.decode_type == NEC && results.value == 0x12248877) // ?
-    {
-        if (status.PW == "PWON")
+        if (results.decode_type == UNKNOWN && results.value == 0xf4ba2988) // power button
         {
-            mqtt.publish(mqttPrefix + "/control/up", status.PW + " PWSTANDBY");
-            //mqtt.publish("/raiomremote/cmd", "PWSTANDBY");
-            send_cmd("PWSTANDBY");
+            prev_time = millis();
+
+            if (status.PW == "PWON")
+            {
+                mqtt.publish(mqttPrefix + "/control/up", status.PW + " PWSTANDBY");
+                //mqtt.publish("/raiomremote/cmd", "PWSTANDBY");
+                send_cmd("PWSTANDBY");
+            }
+            else
+            {
+                mqtt.publish(mqttPrefix + "/control/up", status.PW + " PWON");
+                //mqtt.publish("/raiomremote/cmd", "PWON");
+                send_cmd("PWON");
+            }
         }
-        else
+        else if (results.decode_type == SAMSUNG && results.value == 0xe0e0e01f) // volume up
         {
-            mqtt.publish(mqttPrefix + "/control/up", status.PW + " PWON");
-            //mqtt.publish("/raiomremote/cmd", "PWON");
-            send_cmd("PWON");
+            prev_time = millis();
+            send_cmd("MVUP");
         }
-    }
-    if (results.decode_type == NEC && results.value == 0x122404fb) // HD-kanaler
-    {
-        if (status.SI == "SITV")
+        else if (results.decode_type == SAMSUNG && results.value == 0xe0e0d02f) // volume up
         {
-            send_cmd("SIDVD");
-        }
-        else
-        {
-            send_cmd("SITV");
+            prev_time = millis();
+            send_cmd("MVDOWN");
         }
     }
 
