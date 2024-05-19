@@ -1,22 +1,16 @@
-import os
-import json
-import asyncio
 import aiomqtt
-import tornado.ioloop
+import asyncio
+import json
+import os
+import ssl
+
 import tornado.httpserver
 import tornado.web
 import tornado.websocket
-import tornado.platform.asyncio
+
+from tornado.ioloop import IOLoop
 
 # TODO Update PRECACHE in python based on git hash or MD5?
-# done Fix cookie
-# done Reconnect websocket (on click, maybe also on timeout)
-# done Show websocket status on page
-# done python3, asyncio
-# done Get ServiceWorker to work with basic auth
-# done Status on reload
-# done Fix password (leaked to GitHub)
-# done webworker
 
 
 SCRIPT_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -28,55 +22,57 @@ class Denon():
         self.status = {}
 
         loop = asyncio.get_event_loop()
-        self.client = aiomqtt.Client(loop)
-        self.client.on_connect = self._on_connect
-        self.client.on_message = self._on_message
-        self.connected  = asyncio.Event(loop=loop)
+        self.client = None
 
-    def cmd(self, cmd):
+    async def cmd(self, cmd):
+        if not self.client:
+            return
+
         print("cmd   %r" % cmd)
-        self.client.publish("/raiomremote/cmd", cmd)
+        await self.client.publish("/raiomremote/cmd", cmd)
 
     async def request_status(self):
+        if not self.client:
+            return
+
         print("request_status")
-        self.client.publish("/raiomremote/api", "request_status")
+        await self.client.publish("/raiomremote/api", "request_status")
         return self.status
 
-    async def start(self):
+    async def run(self):
+        client_params = {
+                'hostname': self.config['mqtt_host'],
+                'port':     self.config['mqtt_port']
+        }
+
         if 'mqtt_user' in self.config:
-            self.client.username_pw_set(self.config['mqtt_user'], self.config['mqtt_pass'])
+            client_params['username'] = self.config['mqtt_user']
+            client_params['password'] = self.config['mqtt_pass']
         if 'mqtt_cert' in self.config:
-            self.client.tls_set(
+            #tls_context = ssl.create_default_context()
+            client_params['tls_params'] = aiomqtt.TLSParameters(
                     ca_certs    = self.config['mqtt_ca'],
                     certfile    = self.config['mqtt_cert'],
-                    keyfile     = self.config['mqtt_key'])
+                    keyfile     = self.config['mqtt_key'],
+                    cert_reqs   = ssl.CERT_REQUIRED)
         elif 'mqtt_ca' in self.config:
-            self.client.tls_set(
-                    ca_certs    = self.config['mqtt_ca'])
-        self.client.loop_start()
-        await self.client.connect(self.config['mqtt_host'], self.config['mqtt_port'], 60)
-        await self.connected.wait()
+            client_params['tls_params'] = aiomqtt.TLSParameters(
+                    ca_certs    = self.config['mqtt_ca'],
+                    cert_reqs   = ssl.CERT_REQUIRED)
 
-    async def stop(self):
-        await self.client.loop_stop()
-        self.client.disconnect()
+        print(client_params)
+        async with aiomqtt.Client(**client_params) as client:
+            print('connected?')
+            self.client = client
+            await client.subscribe("/raiomremote/events/#")
+            await self.request_status()
+            async for msg in client.messages:
+                print("Topic %s, payload %s" % (msg.topic, msg.payload))
 
-    def _on_connect(self, client, userdata, flags, rc):
-        print("Connected with result code %s" % rc)
+                self.status = json.loads(msg.payload.decode('utf-8'))
 
-        # Subscribing in on_connect() means that if we lose the connection and
-        # reconnect then subscriptions will be renewed.
-        client.subscribe("/raiomremote/events/#")
-
-        self.connected.set()
-
-    def _on_message(self, client, userdata, msg):
-        print("Topic %s, payload %s" % (msg.topic, msg.payload))
-
-        self.status = json.loads(msg.payload.decode('utf-8'))
-
-        for ws_client in WSHandler.participants:
-            ws_client.write_message(self.status)
+                for ws_client in WSHandler.participants:
+                    ws_client.write_message(self.status)
 
 
 class WSHandler(tornado.websocket.WebSocketHandler):
@@ -120,11 +116,11 @@ class MainHandler(tornado.web.RequestHandler):
 
         if path == 'api/cmd':
             cmd = json.loads(self.request.body.decode('utf-8'))
-            self.denon.cmd(cmd['cmd'])
+            IOLoop.current().spawn_callback(self.denon.cmd, cmd['cmd'])
             self.set_status(200)
             self.write(self.denon.status)
         elif path == 'api/request_status':
-            self.denon.request_status()
+            IOLoop.current().run_sync(self.denon.request_status)
             self.set_status(200)
             self.write('OK')
         else:
@@ -169,37 +165,36 @@ class MainHandler(tornado.web.RequestHandler):
             self.send_error(404)
 
 def main():
+    config = json.load(open(os.path.join(SCRIPT_PATH, 'server.json')))
+
+    # Webserver
     application = tornado.web.Application([
         (r'/ws', WSHandler),
         (r"/static/(.*)", tornado.web.StaticFileHandler, dict(path=SCRIPT_PATH)),
         (r'/(.*)', MainHandler),
     ], cookie_secret="d0870884-495c-4758-8c86-24383dc0ee69")
 
-    tornado.platform.asyncio.AsyncIOMainLoop().install()
-    loop = asyncio.get_event_loop()
-
-    config = json.load(open(os.path.join(SCRIPT_PATH, 'server.json')))
-    denon = Denon(config)
-
-    MainHandler.denon = denon
-    MainHandler.config = config
-
-    loop.run_until_complete(denon.start())
-    loop.run_until_complete(denon.request_status())
-
     http_server = tornado.httpserver.HTTPServer(application)
     if 'http_addr' in config:
         http_server.listen(config['http_port'], address=config['http_addr'])
     else:
         http_server.listen(config['http_port'])
+    print('http_port', config['http_port'])
 
+    # MQTT client
+    denon = Denon(config)
+
+    MainHandler.denon = denon
+    MainHandler.config = config
+
+    # Runtime loop
     try:
-        loop.run_forever()
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(denon.run())
     except KeyboardInterrupt:
         pass
 
     print("Stopping")
-    loop.run_until_complete(denon.stop())
     loop.stop()
 
 
