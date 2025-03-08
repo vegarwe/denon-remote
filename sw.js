@@ -1,4 +1,4 @@
-const PRECACHE = 'precache_v44';
+const PRECACHE = 'precache_v45';
 
 const PRECACHE_URLS = [
   '', // Alias for index.html
