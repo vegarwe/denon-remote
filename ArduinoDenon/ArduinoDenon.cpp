@@ -204,6 +204,7 @@ void mqttMessageReceived(MQTTClient *client, char topicBuffer[], char payloadBuf
     }
 }
 
+static String event;
 
 void setup()
 {
@@ -225,6 +226,8 @@ void setup()
     }
 
     pinMode(LED_BUILTIN, OUTPUT);
+
+    event.reserve(64);
 
     // Setup Denon Serial port an status
     status.MU = "unknown";
@@ -289,8 +292,7 @@ void serial_read_loop()
     }
 
     digitalWrite(LED_BUILTIN, HIGH);
-    String event;
-    event.reserve(64);
+
     while (denon_serial->available())
     {
         char newByte = denon_serial->read();
@@ -352,7 +354,11 @@ void irrgang_loop()
     static uint32_t prev_time = 0;
     if (millis() - prev_time > 300)
     {
-        if (results.decode_type == UNKNOWN && results.value == 0xf4ba2988) // power button
+        if (
+                (results.decode_type == UNKNOWN && results.value == 0xf4ba2988) // power button?
+                ||
+                (results.decode_type == SAMSUNG && results.value == 0xe0e040bf) // power button?
+            )
         {
             prev_time = millis();
 
@@ -379,6 +385,11 @@ void irrgang_loop()
             prev_time = millis();
             send_cmd("MVDOWN");
         }
+        else if (results.decode_type == SAMSUNG && results.value == 0xe0e0807f) // Kilde
+        {
+            prev_time = millis();
+            tvToggle = millis();
+        }
     }
 
     irrecv.resume(); // Receive the next value
@@ -404,7 +415,7 @@ void lpd433_loop()
                 debugger->printf("value: %08llx ", recvValue);
                 debugger->printf("bitlen: %d ",    mySwitch.getReceivedBitlength());
                 debugger->printf("delay:  %d ",    mySwitch.getReceivedDelay());
-                debugger->printf("proto:  %d\n",    mySwitch.getReceivedProtocol());
+                debugger->printf("proto:  %d\n",   mySwitch.getReceivedProtocol());
             }
 
             //if (debugger) {
