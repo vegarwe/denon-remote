@@ -1,7 +1,6 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <IRremote.h>
-#include <RCSwitch.h>
 #include <HardwareSerial.h>
 #include <MQTT.h> // TODO: Remove?
 #include <WiFi.h>
@@ -21,8 +20,6 @@ static uint32_t         tvToggle    = 0;
 
 static byte             SEND_PIN    = 19;
 static IRsend           irsend(SEND_PIN);
-
-static RCSwitch         mySwitch;
 
 
 static HardwareSerial* denon_serial = NULL;
@@ -252,9 +249,6 @@ void setup()
 
     irrecv.enableIRIn();
 
-    pinMode(12, INPUT);
-    mySwitch.enableReceive(digitalPinToInterrupt(12));
-
     mqtt.publish(MQTT_ROOT "/control/up", "starting: " + WiFi.macAddress() + " 0x06");
 }
 
@@ -396,50 +390,6 @@ void irrgang_loop()
 }
 
 
-void lpd433_loop()
-{
-    static uint64_t      lastValue = 0;
-    static unsigned long lastStamp = 0;
-
-    if (mySwitch.available()) {
-        uint64_t recvValue = mySwitch.getReceivedValue();
-        unsigned long now = millis();
-
-        if (lastValue == recvValue && (now - lastStamp) < 1400)
-        {
-            //Serial.printf("Skipping lastStamp %lu now %lu, %lu\n", lastStamp, now, now - lastStamp);
-        }
-        else
-        {
-            if (debugger) {
-                debugger->printf("value: %08llx ", recvValue);
-                debugger->printf("bitlen: %d ",    mySwitch.getReceivedBitlength());
-                debugger->printf("delay:  %d ",    mySwitch.getReceivedDelay());
-                debugger->printf("proto:  %d\n",   mySwitch.getReceivedProtocol());
-            }
-
-            //if (debugger) {
-            //    unsigned int * timings = mySwitch.getReceivedRawdata();
-
-            //    for (int i = 0; i < mySwitch.getReceivedBitlength() * 2; i++) {
-            //        Serial.printf("%d,", timings[i]);
-            //    }
-            //    Serial.println();
-            //}
-
-            char hexValue[] = "0x123456789abcdef0";
-            snprintf(hexValue, sizeof(hexValue), "0x%08llx", recvValue);
-            mqtt.publish(mqttPrefix + "/lpd433/up", hexValue);
-        }
-
-        lastValue = recvValue;
-        lastStamp = now;
-
-        mySwitch.resetAvailable();
-    }
-}
-
-
 void loop()
 {
     serial_read_loop();
@@ -451,7 +401,6 @@ void loop()
     mqtt_ota_loop(); // Will block once update starts
 
     irrgang_loop();
-    lpd433_loop();
 
     yield();
     //digitalWrite(LED_BUILTIN, LOW);
