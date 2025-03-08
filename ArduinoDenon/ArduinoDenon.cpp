@@ -394,7 +394,7 @@ void lpd433_loop()
         uint64_t recvValue = mySwitch.getReceivedValue();
         unsigned long now = millis();
 
-        if (lastValue == recvValue && abs(now - lastStamp) < 1400)
+        if (lastValue == recvValue && (now - lastStamp) < 1400)
         {
             //Serial.printf("Skipping lastStamp %lu now %lu, %lu\n", lastStamp, now, now - lastStamp);
         }
