@@ -29,7 +29,11 @@ class Denon():
             return
 
         print("cmd   %r" % cmd)
-        await self.client.publish("/raiomremote/cmd", cmd)
+
+        if cmd == "ToggleTV":
+            await self.client.publish("denon/24:62:AB:D2:80:6C/irrgang", "power")
+        else:
+            await self.client.publish("/raiomremote/cmd", cmd)
 
     async def request_status(self):
         if not self.client:
@@ -57,8 +61,12 @@ class Denon():
                     cert_reqs   = ssl.CERT_REQUIRED)
         elif 'mqtt_ca' in self.config:
             client_params['tls_params'] = aiomqtt.TLSParameters(
-                    ca_certs    = self.config['mqtt_ca'],
-                    cert_reqs   = ssl.CERT_REQUIRED)
+                   #tls_version = ssl.PROTOCOL_TLS,
+                   #cert_reqs   = ssl.CERT_REQUIRED,
+                   #cert_reqs   = ssl.CERT_OPTIONAL,
+                    cert_reqs   = ssl.CERT_NONE,
+                    ca_certs    = self.config['mqtt_ca']
+                    )
 
         print(client_params)
         async with aiomqtt.Client(**client_params) as client:
